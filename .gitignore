@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# NOTE: experiments/*.json and experiments/*.png are intentionally committed
+# as the reference artifacts for v0.1.0 (referenced by the README).

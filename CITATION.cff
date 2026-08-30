@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+title: "FedGraph-RL: RL-orchestrated federated GNN fraud detection"
+message: "If you use this software, please cite it as below."
+type: software
+authors:
+  - given-names: Gaurav
+    family-names: Kosare
+version: 0.1.0
+date-released: 2026-08-30
+license: MIT
+repository-code: "https://github.com/GauravKosare/fedgraph-rl"
+abstract: >
+  A NumPy-only research sandbox that combines a graph neural network fraud
+  detector, federated learning across simulated non-IID edge devices, and a
+  reinforcement-learning controller for per-round client selection and
+  compute-budget allocation. A 5-seed evaluation finds that the learned
+  controller reliably beats a fixed training cohort but ties uniform-random
+  client selection and a fraud-rate heuristic — a reproducible null result
+  consistent with the federated-learning literature.
+keywords:
+  - federated learning
+  - graph neural network
+  - reinforcement learning
+  - client selection
+  - fraud detection
