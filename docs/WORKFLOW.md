@@ -46,7 +46,8 @@ sequenceDiagram
     end
 
     ENV->>SRV: client reports
-    SRV->>SRV: compute-weighted FedAvg
+    Note right of ENV: v0.2: a client whose epochs / speed<br/>exceeds the round deadline is DROPPED<br/>(compute still charged as cost)
+    SRV->>SRV: compute-weighted FedAvg (on-time updates only)
     SRV->>ENV: new global GCN
     ENV->>ENV: val F1 → reward = ΔF1·100 − cost_coeff·max(0, cost − budget)
     ENV->>PI: (next state, reward, done)
@@ -135,3 +136,6 @@ git add -A && git commit -m "..."
 | `episodes` | RL updates per seed | ↑ = more training (also more drift with plain REINFORCE) |
 | `rollouts_per_update` | trajectories averaged per update | ↑ = lower‑variance gradient, linearly more compute |
 | `use_critic` | learned `V(s)` vs moving‑average baseline | actor–critic on/off |
+| `stragglers` *(v0.2)* | heterogeneous device speeds + deadline; late updates dropped | on = timing matters; the policy sees device speed |
+| `straggler_frac` / `straggler_slowdown` | how many clients are slow, and by how much | ↑ = more/worse stragglers to route around |
+| `deadline_slack` | round deadline ÷ a fast client's fair‑share time | ↓ = tighter deadline, more drops |

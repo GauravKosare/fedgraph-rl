@@ -1,7 +1,11 @@
 """Multi-seed sweep: run the full pipeline over several graph seeds and report
 mean +/- std per policy, so the comparison isn't hostage to one partition.
 
-Run:  python experiments/sweep.py [n_seeds]
+Run:  python experiments/sweep.py [n_seeds] [--stragglers]
+
+  --stragglers   enable the v0.2 straggler/deadline environment and write to
+                 experiments/sweep_results_stragglers.{json,png} instead of the
+                 canonical v0.1 sweep_results.{json,png}.
 """
 from __future__ import annotations
 
@@ -22,9 +26,13 @@ METRICS = ["f1", "precision", "recall", "auc"]
 
 
 def main():
-    n_seeds = int(sys.argv[1]) if len(sys.argv) > 1 else 5
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    stragglers = "--stragglers" in sys.argv
+    n_seeds = int(args[0]) if args else 5
     cfg = Config()
     cfg.episodes = 100          # RL updates per seed
+    cfg.stragglers = stragglers
+    tag = "_stragglers" if stragglers else ""
     base_seed = cfg.seed
 
     per_seed = []
@@ -61,7 +69,7 @@ def main():
         wins = int((d > 0).sum())
         print(f"  vs {p:24s} mean d={d.mean():+.3f}  RL wins {wins}/{n_seeds}")
 
-    out = Path(__file__).resolve().parents[1] / "experiments" / "sweep_results.json"
+    out = Path(__file__).resolve().parents[1] / "experiments" / f"sweep_results{tag}.json"
     out.write_text(json.dumps({"n_seeds": n_seeds, "config": cfg.to_dict(),
                                "per_seed": per_seed, "summary": summary}, indent=2))
     print(f"\nsaved {out}   ({time.time() - t0:.1f}s)")

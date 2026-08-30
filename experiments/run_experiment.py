@@ -51,7 +51,11 @@ def make_env(cfg, data, shards, model_cfg, seed):
                         max_rounds=cfg.max_rounds,
                         clients_per_round=cfg.clients_per_round,
                         epoch_budget=cfg.epoch_budget,
-                        cost_coeff=cfg.cost_coeff, seed=seed)
+                        cost_coeff=cfg.cost_coeff,
+                        stragglers=cfg.stragglers,
+                        straggler_frac=cfg.straggler_frac,
+                        straggler_slowdown=cfg.straggler_slowdown,
+                        deadline_slack=cfg.deadline_slack, seed=seed)
 
 
 def run_once(cfg: Config, seed: int, verbose: bool = True):

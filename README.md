@@ -9,12 +9,16 @@ Learning** across simulated edge devices, orchestrated by a **Reinforcement
 Learning** controller that decides who trains each round and with how much
 compute.
 
-> **Headline result (5‑seed evaluation):** the learned controller **reliably beats
-> a fixed training cohort (+0.11 F1, 5/5 seeds)** but lands in a **statistical
-> dead heat with uniform‑random client selection** and with a simple
-> fraud‑rate heuristic. This is a *negative result*, and a useful one: on this
-> class of problem, random client sampling is a genuinely strong baseline — a
-> finding that matches the federated‑learning literature.
+> **Headline result (5‑seed evaluation):**
+> - **v0.1 (no stragglers):** the learned controller reliably beats a fixed
+>   training cohort (+0.11 F1, 5/5 seeds) but is in a **statistical dead heat with
+>   uniform‑random client selection** (−0.017 F1) and a fraud‑rate heuristic.
+>   Random client sampling is a genuinely strong baseline — consistent with the
+>   federated‑learning literature.
+> - **v0.2 (stragglers + wall‑clock deadline):** adding timing pressure moves the
+>   result in RL's favour — **+0.037 F1 vs random, winning 3/5 seeds** — but it is
+>   still within cross‑seed noise and introduces a training‑instability failure
+>   mode. A lean, not yet a clean win. See §4.2.
 
 Everything runs on **NumPy only** (no PyTorch/TensorFlow), CPU, in minutes.
 
@@ -108,10 +112,17 @@ All knobs live in [`fedgraphrl/config.py`](fedgraphrl/config.py).
 
 ## 4. Results
 
+Two environments are evaluated: **§4.1** the canonical v0.1 setup (no stragglers),
+and **§4.2** the v0.2 straggler/deadline variant. Same graphs, same controller,
+same 5 seeds `{7,107,207,307,407}`.
+
+### 4.1 Canonical (v0.1) — no stragglers
+
 **Setup:** 1,200‑account graph, 12 fraud rings, 8 clients, non‑IID Dirichlet
 α = 0.10, 25 federated rounds/episode, 100 actor–critic updates/seed,
 4 rollouts averaged per update, decision threshold tuned on a validation split.
 5 graph seeds. Numbers are **test‑set** fraud detection, mean ± std across seeds.
+Reproduce: `python experiments/sweep.py 5`.
 
 | Policy | F1 | AUC | Precision | Recall |
 |---|---|---|---|---|
@@ -132,7 +143,7 @@ All knobs live in [`fedgraphrl/config.py`](fedgraphrl/config.py).
 
 ![5-seed sweep: test F1 and AUC per policy](experiments/sweep_results.png)
 
-### What the numbers say
+#### What the numbers say
 
 1. **The RL controller works — against the weak baseline.** A fixed training
    cohort loses coverage of fraud rings it never sees; the learned policy rotates
@@ -143,7 +154,7 @@ All knobs live in [`fedgraphrl/config.py`](fedgraphrl/config.py).
 3. **It does not reach centralised training.** FL on this non‑IID split costs
    ~0.10 F1 versus pooling the data — an FL problem, not an orchestration problem.
 
-### Why the RL win never materialised (and what we tried)
+#### Why the RL win never materialised (and what we tried)
 
 Every plausible lever was pulled — see [`docs/DESIGN_LOG.md`](docs/DESIGN_LOG.md)
 for the full chronology. In brief:
@@ -164,14 +175,65 @@ client barely matters — you get the ring or you don't. "Sample everyone
 eventually" (random) is close to optimal, so there is almost no headroom for a
 learned scheduler to claim.
 
-### When would RL be expected to win?
+### 4.2 Straggler / deadline variant (v0.2)
 
-Not from more tuning — from a harder environment that rewards *timing*:
-client stragglers and dropouts, a per‑round wall‑clock deadline, concept drift so
-recently‑trained clients decay, or a communication budget tight enough that
-"train everyone eventually" is infeasible. Those are the conditions under which
-FL client selection is an open research problem; this sandbox is set up to add
-them.
+**What changed:** `straggler_frac = 0.35` of clients run `straggler_slowdown = 4`×
+slower; each round has a wall‑clock deadline (`deadline_slack = 1.15` × a fast
+client's fair‑share time). A selected client that can't finish its assigned epochs
+by the deadline still burns compute but its update is **dropped** from FedAvg. The
+policy now sees each client's device speed as a state feature. Everything else is
+identical. Reproduce: `python experiments/sweep.py 5 --stragglers`.
+
+| Policy | F1 | AUC | Precision | Recall |
+|---|---|---|---|---|
+| **RL controller (actor–critic)** | **0.481 ± 0.190** | 0.728 ± 0.135 | 0.582 | 0.575 |
+| Uniform‑random client selection | 0.444 ± 0.124 | 0.748 ± 0.070 | 0.542 | 0.450 |
+| Fraud‑rate greedy | 0.509 ± 0.057 | 0.741 ± 0.092 | 0.539 | 0.551 |
+| Fixed cohort ("all") | 0.457 ± 0.108 | 0.711 ± 0.074 | 0.517 | 0.459 |
+| Centralised upper bound (no stragglers) | 0.698 ± 0.122 | 0.921 ± 0.053 | 0.756 | 0.676 |
+
+**Paired per‑seed comparison** (RL F1 − baseline F1):
+
+| vs. baseline | mean Δ F1 | seeds RL wins | (v0.1 was) |
+|---|---|---|---|
+| uniform‑random | **+0.037** | 3 / 5 | −0.017, 2/5 |
+| fraud‑rate greedy | −0.028 | 2 / 5 | +0.005, 1/5 |
+| fixed cohort | +0.024 | 2 / 5 | +0.111, 5/5 |
+| centralised upper bound | −0.217 | 1 / 5 | −0.095, 1/5 |
+
+![5-seed straggler sweep](experiments/sweep_results_stragglers.png)
+
+**Read this honestly:**
+
+1. **Stragglers move the result in RL's favour, but do not settle it.** RL goes
+   from −0.017 to **+0.037** F1 vs uniform‑random and wins the majority of seeds
+   (3/5) — the timing signal is real and the policy uses the device‑speed feature.
+   On seed 7 it is decisive (RL 0.73 vs random 0.51). But +0.037 is still inside
+   the ±0.19 cross‑seed noise: a lean, not a win.
+2. **The fraud‑rate heuristic is now the baseline to beat, and RL doesn't.** With
+   stragglers, `fraud_greedy` is both competitive (0.509) and *by far the most
+   stable* (± 0.057). RL's mean is dragged down by variance, not by a low floor.
+3. **New failure mode.** On seed 207 RL training collapsed (F1 0.196, AUC 0.499 —
+   no better than chance ranking). Dropped rounds make the reward sparser and
+   noisier; plain REINFORCE occasionally never recovers. This is the next thing to
+   fix (a small explicit per‑drop penalty for a denser signal, or entropy
+   annealing).
+4. **Stragglers hurt FL badly.** Every federated policy lost ~0.15 F1 while the
+   centralised bound (which has no stragglers) held at 0.698 — the FL gap widened
+   from −0.10 to −0.22. Straggler mitigation matters more here than selection
+   cleverness.
+
+**Verdict:** v0.2 is the environment where a learned scheduler *should* win, and
+it does edge ahead — but not cleanly, and at the cost of stability. A confident
+positive result needs the instability fixed first (planned for v0.2.1).
+
+### When would RL be expected to win cleanly?
+
+Building on §4.2: fix the training instability, then add the other timing
+pressures — client dropouts, concept drift so recently‑trained clients decay, a
+communication budget tight enough that "train everyone eventually" is infeasible.
+Those are the conditions under which FL client selection is a genuinely open
+research problem.
 
 ---
 
@@ -189,9 +251,11 @@ fedgraph-rl/
 │   └── config.py              every hyper-parameter, one dataclass
 ├── experiments/
 │   ├── run_experiment.py      single-seed: train controller, compare to baselines, plot
-│   ├── sweep.py               multi-seed: mean ± std + paired comparison + plot
-│   ├── results.json/.png      single-seed artifacts (committed)
-│   └── sweep_results.json/.png  5-seed artifacts (committed)
+│   ├── sweep.py               multi-seed: mean ± std + paired comparison + plot ( --stragglers for v0.2 )
+│   ├── results.json/.png              single-seed artifacts, v0.1 (committed)
+│   ├── sweep_results.json/.png        5-seed artifacts, v0.1 (committed)
+│   ├── results_stragglers.json/.png       single-seed artifacts, v0.2 (committed)
+│   └── sweep_results_stragglers.json/.png 5-seed artifacts, v0.2 (committed)
 ├── tests/test_autograd.py     finite-difference gradient check + federated-round smoke test
 ├── docs/
 │   ├── TRD.md                 Technical Requirements Document
@@ -211,8 +275,9 @@ fedgraph-rl/
 - Pure NumPy; deterministic given a seed (`numpy.random.default_rng`).
 - `sweep.py` uses seeds `7, 107, 207, 307, 407` and reports every per‑seed number
   in `sweep_results.json`, not just the aggregate.
-- The committed `*.png` / `*.json` in `experiments/` were produced by the exact
-  config in [`fedgraphrl/config.py`](fedgraphrl/config.py) at tag `v0.1.0`.
+- The committed v0.1 `*.png` / `*.json` were produced by the config in
+  [`fedgraphrl/config.py`](fedgraphrl/config.py); the `*_stragglers.*` artifacts by
+  the same config with `stragglers=True` (`sweep.py 5 --stragglers`).
 - Runtime: single seed ≈ 70 s, 5‑seed sweep ≈ 12 min on a laptop CPU.
 
 ---
@@ -224,8 +289,8 @@ go public once reviewed. Before flipping it public:
 
 - [ ] Confirm the licensing choice (currently MIT) and the copyright holder name.
 - [ ] Decide whether to keep the large `*.png` artifacts in git or move to a release.
-- [ ] Optional: add the "harder environment" variants described in §4 so the
-      public version can show a *positive* RL result too.
+- [ ] v0.2.1: fix the straggler‑variant training instability (§4.2 point 3) before
+      claiming a positive RL result.
 
 Make it public with:
 

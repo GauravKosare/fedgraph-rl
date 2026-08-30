@@ -48,13 +48,12 @@ class PolicyNet:
 
 class ValueNet:
     """State-value critic V(s).  Input is a permutation-invariant pooling of the
-    per-client state matrix: [global(3), mean/max/min over clients of the 4
-    dynamic features] -> 15 dims."""
+    per-client state matrix: [global(3), mean/max/min over clients of the
+    dynamic features].  `in_dim` = 3 + 3 * n_dynamic."""
 
-    IN_DIM = 15
-
-    def __init__(self, hidden: int = 32, seed: int = 0):
+    def __init__(self, in_dim: int = 15, hidden: int = 32, seed: int = 0):
         rng = np.random.default_rng(seed)
+        self.IN_DIM = in_dim
         self.W1 = rng.normal(0, 1.0 / np.sqrt(self.IN_DIM), (self.IN_DIM, hidden))
         self.b1 = np.zeros(hidden)
         self.W2 = rng.normal(0, 1.0 / np.sqrt(hidden), (hidden, 1))
@@ -95,7 +94,8 @@ class ReinforceController:
         self.entropy_coeff = entropy_coeff
         self.use_critic = use_critic
         self.critic_lr = critic_lr
-        self.critic = ValueNet(seed=seed + 2) if use_critic else None
+        critic_in = 3 + 3 * (env.feature_dim - 3)
+        self.critic = ValueNet(in_dim=critic_in, seed=seed + 2) if use_critic else None
         self.baseline = 0.0
         self.rng = np.random.default_rng(seed + 1)
 

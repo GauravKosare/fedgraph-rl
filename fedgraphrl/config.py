@@ -21,6 +21,12 @@ class Config:
     epoch_budget: int = 12             # total local epochs to split each round
     cost_coeff: float = 0.06
 
+    # v0.2 -- stragglers & per-round wall-clock deadline (opt-in; v0.1 canonical run keeps this off)
+    stragglers: bool = False           # heterogeneous device speeds + late-update drop
+    straggler_frac: float = 0.35       # fraction of clients that are "slow"
+    straggler_slowdown: float = 4.0    # slow clients run this many x slower
+    deadline_slack: float = 1.15       # round deadline = slack x (fast client's fair-share time)
+
     # RL training
     episodes: int = 50
     rollouts_per_update: int = 4       # trajectories averaged per REINFORCE step

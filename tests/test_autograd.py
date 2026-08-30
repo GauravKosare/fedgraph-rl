@@ -51,7 +51,23 @@ def test_federated_round_smoke():
     assert np.isfinite(r) and "val_f1" in info
 
 
+def test_straggler_drop():
+    data, ring_of = make_transaction_graph(num_accounts=300, fraud_ring_count=4, seed=2)
+    shards = partition_non_iid(data, ring_of, num_clients=4, seed=2)
+    cfg = {"hidden": 16, "dropout": 0.5, "n_classes": 2, "in_dim": data.num_features}
+    env = FederatedEnv(data, shards, cfg, max_rounds=4, clients_per_round=3,
+                       epoch_budget=9, stragglers=True, straggler_frac=0.5,
+                       straggler_slowdown=6.0, deadline_slack=1.0, seed=2)
+    assert (env.client_speed < 1.0).any()          # some clients are slow
+    slow = int(np.argmin(env.client_speed))
+    # dump the whole epoch budget on the slowest client -> it must be dropped
+    _, _, _, info = env.step(np.array([slow, (slow + 1) % 4, (slow + 2) % 4]),
+                             np.array([7, 1, 1]))
+    assert info["dropped"] >= 1
+
+
 if __name__ == "__main__":
     test_matmul_relu_gradcheck()
     test_federated_round_smoke()
+    test_straggler_drop()
     print("ok")

@@ -72,13 +72,14 @@ Build the smallest honest testbed that can answer:
 | **F‑5** | Federated client: load global weights, run `e` local epochs of class‑weighted cross‑entropy on its shard, return weights + simulated compute/comm cost. | `FederatedClient.train`; `ClientReport` fields. |
 | **F‑6** | Server: compute‑weighted FedAvg; evaluate global model on train/val/test; tune the decision threshold on validation F1. | `fedavg`, `FederatedServer.evaluate`, `FederatedServer.tuned_threshold`. |
 | **F‑7** | RL environment: one episode = train a fresh global GCN over `max_rounds` rounds; `step(selected, epochs)` returns `(state, reward, done, info)`. | `FederatedEnv`; smoke test. |
-| **F‑8** | State = global progress (3 features) + per‑client dynamic descriptors (4 features): rounds‑since‑selected, last local loss, shard fraud rate, shard size. | `FederatedEnv._state`. |
+| **F‑8** | State = global progress (3 features) + per‑client dynamic descriptors (5 features): rounds‑since‑selected, last local loss, shard fraud rate, shard size, device speed. | `FederatedEnv._state`. |
 | **F‑9** | Action = choose `k` clients without replacement (Plackett–Luce over selection logits) + split `epoch_budget` local epochs among them (softmax over budget logits). | `ReinforceController.act`. |
 | **F‑10** | Reward = `ΔF1 · 100 − cost_coeff · max(0, round_cost − cost_budget)` where `cost_budget` is the auto‑calibrated cost of an average full round × slack. | `FederatedEnv.step`. |
 | **F‑11** | Controller trains with episodic REINFORCE; supports (a) multi‑rollout gradient averaging, (b) scalar moving‑average baseline OR learned `V(s)` critic (actor–critic). | `ReinforceController.run_episode`, `_update`; `ValueNet`. |
 | **F‑12** | Baselines: `random`, `fraud_greedy`, `all` (fixed cohort); plus a centralised (non‑federated) upper bound. | `HeuristicController`; `centralised_upper_bound`. |
 | **F‑13** | Single‑seed experiment: train controller, evaluate policy (averaged over 7 sampled rollouts), compare to all baselines, write JSON + PNG. | `experiments/run_experiment.py`. |
 | **F‑14** | Multi‑seed sweep: run F‑13 over `n` seeds, report per‑policy mean ± std and paired per‑seed deltas, write JSON + PNG. | `experiments/sweep.py`. |
+| **F‑15** *(v0.2)* | Straggler model: heterogeneous client speeds; a selected client whose `epochs / speed` work time exceeds the per‑round deadline has its update dropped from FedAvg but still incurs compute cost. `stragglers=False` ⇒ v0.1 behaviour. | `FederatedEnv.__init__` / `.step`; `info["dropped"]`. |
 
 ---
 
@@ -199,10 +200,10 @@ No external datasets. No PII. Data regenerated from seed on every run.
 
 ## 9. Future work (versioned)
 
-| Version | Addition | Expected effect |
-|---|---|---|
-| 0.2 | Client stragglers + per‑round wall‑clock deadline | Timing becomes exploitable → RL should separate from random |
-| 0.2 | Concept drift (client models decay if not retrained) | Rewards *recency‑aware* scheduling |
+| Version | Addition | Status | Expected effect |
+|---|---|---|---|
+| 0.2 | Client stragglers + per‑round wall‑clock deadline | **implemented** — `stragglers` / `straggler_frac` / `straggler_slowdown` / `deadline_slack` in `config.py`; late updates dropped from FedAvg | Timing becomes exploitable → RL should separate from random (single‑seed: RL 0.69 F1 vs random 0.51) |
+| 0.2 | Concept drift (client models decay if not retrained) | planned | Rewards *recency‑aware* scheduling |
 | 0.3 | Richer state: per‑client gradient norm, embedding drift, update disagreement | More signal for the policy |
 | 0.3 | GraphSAGE sampling layer (mini‑batch, scale past dense adjacency) | Larger graphs |
 | 0.4 | Secure‑aggregation / DP‑SGD cost model | Realistic privacy–utility trade‑off in the reward |

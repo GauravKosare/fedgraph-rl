@@ -261,3 +261,43 @@ graph task and shows that neither an actor–critic nor reward tweaks change it.
 *algorithm*: add client stragglers, wall‑clock deadlines, or concept drift so that
 *timing* carries reward. Those variants are specced in [`TRD.md`](TRD.md) §9 as
 `v0.2+`.
+
+---
+
+## 15. v0.2 — stragglers and a wall‑clock deadline
+
+**Decision.** Add the first `v0.2` environment change: `straggler_frac = 0.35` of
+clients run `4×` slower; each round has a deadline (`1.15 ×` a fast client's
+fair‑share time); a selected client that can't finish its assigned epochs by the
+deadline still burns compute but its **update is dropped** from FedAvg. Device
+speed is added as a 5th per‑client state feature. Toggle: `stragglers` (default
+**off** — the v0.1 result stays canonical).
+
+**Why.** §14 concluded the missing ingredient was *timing*. If the agent is
+punished (via dropped rounds) for dumping epochs on a slow client, and it can see
+which clients are slow, then "route work around stragglers while still covering
+their rings" is a real skill that random selection does not have.
+
+**What happened (5 seeds).**
+
+| | RL F1 | random F1 | fraud_greedy F1 | Δ(RL−random) |
+|---|---|---|---|---|
+| v0.1 | 0.60 ± 0.15 | 0.62 ± 0.17 | 0.60 ± 0.14 | −0.017 (2/5) |
+| **v0.2 stragglers** | **0.48 ± 0.19** | 0.44 ± 0.12 | 0.51 ± 0.06 | **+0.037 (3/5)** |
+
+- The result **moved in RL's favour** — from losing to random to edging it on the
+  majority of seeds. On seed 7 it is decisive (0.73 vs 0.51). The device‑speed
+  feature is doing something.
+- But +0.037 is still **inside the ±0.19 noise**, so this is a lean, not a win.
+- `fraud_greedy` became the strongest baseline by virtue of being *stable*
+  (±0.06). RL's low mean is a variance problem, not a floor problem.
+- **New failure mode:** seed 207 collapsed (F1 0.196, AUC 0.499). Dropped rounds
+  make the reward sparser; plain REINFORCE sometimes never recovers.
+- Stragglers cost every FL policy ~0.15 F1; the centralised bound (no stragglers)
+  was unchanged — straggler *mitigation* matters more than selection cleverness.
+
+**Lesson / next step.** The environment hypothesis from §14 is directionally
+correct but under‑powered as built. Before `v0.2` can claim a positive RL result
+it needs the instability fixed — candidates: a small explicit per‑drop reward
+penalty (denser signal), entropy annealing, or more rollouts on the sparse‑reward
+seeds. Tracked as `v0.2.1`.
