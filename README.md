@@ -260,7 +260,8 @@ fedgraph-rl/
 ├── docs/
 │   ├── TRD.md                 Technical Requirements Document
 │   ├── WORKFLOW.md            end-to-end workflow + mermaid flowcharts
-│   └── DESIGN_LOG.md          every decision, why it was made, what it changed
+│   ├── DESIGN_LOG.md          every decision, why it was made, what it changed
+│   └── APPLICATIONS.md        real-world / industry uses and how to deploy them
 ├── LICENSE                    MIT
 ├── CITATION.cff
 ├── CHANGELOG.md
@@ -307,7 +308,51 @@ MIT — see [`LICENSE`](LICENSE). If you use this, please cite via
 
 ---
 
-## 9. Disclaimer
+## 9. Real‑world applications
+
+FedGraph‑RL is a synthetic sandbox, but it is a small model of three things used
+in industry at different maturity levels. Full write‑up with named references and
+a production rollout plan: [`docs/APPLICATIONS.md`](docs/APPLICATIONS.md).
+
+| Layer | Industry maturity | Where it shows up |
+|---|---|---|
+| **GNN on a transaction / entity graph** for fraud detection | **Production‑proven** | Payments & banking (PayPal, Stripe, Feedzai, Featurespace), marketplaces, insurance, telco, ad‑tech; AML graph platforms (Quantexa, Palantir, TigerGraph, Google Cloud AML AI) |
+| **Federated learning across institutions** (shared model, raw data never moves) | **Real but early** — consortium pilots, regulated industries | Cross‑bank AML / fraud (SWIFT FL pilots, UK Economic Crime Plan, Singapore COSMIC); healthcare (NVIDIA FLARE, Owkin); cross‑operator telecom fraud |
+| **Learned (RL) orchestration of FL client selection** | **Research** | FL research; a few cross‑device FL teams — and this repo's result says the payoff is marginal *unless* rounds have hard deadlines / stragglers (§4.2) |
+
+**The recurring problem it fits:** a criminal network — money‑laundering ring,
+bust‑out fraud ring, mule network, bot farm — operates across several
+organisations at once. No single party sees the whole ring (so per‑party models
+miss it), the parties can't pool raw data (GDPR / GLBA / competition), and the
+revealing signal is relational (who paid whom, shared devices/beneficiaries).
+That is a **federated graph** problem: a GNN to see the ring, FL so no data
+leaves each party.
+
+**Concrete uses:** cross‑bank AML and mule‑account detection · card‑payment fraud
+across issuer/acquirer/network · Authorised Push Payment scam‑beneficiary
+detection · SIM‑box / interconnect fraud across telcos · staged‑accident
+insurance‑fraud rings across insurers · account‑takeover and refund‑abuse rings
+across marketplaces · coordinated invalid traffic across ad exchanges · provider
+billing‑fraud rings across hospitals.
+
+**How you'd deploy it** (sandbox → production): real graph store + neighbour‑
+sampling GNN (GraphSAGE/GAT on PyG/DGL) instead of dense NumPy; a real FL
+framework (Flower / NVIDIA FLARE / OpenFL) instead of `fedavg`; **secure
+aggregation + differential privacy** (usually a regulatory precondition);
+delayed/noisy labels; continuous retraining + drift monitoring; and alerts routed
+to investigators **with explanations** (which paths drove the score) because
+AML/fraud decisions must be auditable. Add the RL orchestrator only for the
+constrained regime where §4.2 shows it helps — otherwise ship random /
+availability‑based selection.
+
+**When *not* to:** one party already has enough data (train centrally) · the
+parties can lawfully pool data (pool it) · the signal is pure tabular (a GBDT will
+match a GNN for less effort) · you expect FL alone to make you compliant (it
+won't — DP, secure aggregation and a lawful basis are still required).
+
+---
+
+## 10. Disclaimer
 
 The data is **synthetic**. This is a methods sandbox, not a production
 fraud‑detection system and not financial or compliance advice. The GNN, the FL
