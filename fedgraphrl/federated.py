@@ -8,7 +8,7 @@ import numpy as np
 from .autograd import Tensor
 from .data import GraphData
 from .gnn import GCN, SGD
-from .metrics import binary_scores
+from .metrics import binary_scores, best_f1_threshold
 
 
 @dataclass
@@ -111,11 +111,12 @@ class FederatedServer:
         """Threshold that maximises F1 on the validation split."""
         d = self.global_data
         proba = self.model.predict_proba(d.features, d.adj)[:, 1]
-        yv, pv = d.labels[d.val_mask], proba[d.val_mask]
-        cands = np.unique(np.concatenate([[0.0], np.sort(pv), [1.0]]))
-        best_t, best_f1 = 0.5, -1.0
-        for t in cands:
-            f1 = binary_scores(yv, pv, t)["f1"]
-            if f1 > best_f1:
-                best_f1, best_t = f1, t
-        return float(best_t)
+        _, thr = best_f1_threshold(d.labels[d.val_mask], proba[d.val_mask])
+        return thr
+
+    def val_f1_tuned(self) -> float:
+        """Best achievable validation F1 (one forward pass). Used as the RL
+        reward -- see FederatedEnv._val_f1."""
+        d = self.global_data
+        proba = self.model.predict_proba(d.features, d.adj)[:, 1]
+        return best_f1_threshold(d.labels[d.val_mask], proba[d.val_mask])[0]

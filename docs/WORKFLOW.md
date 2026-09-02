@@ -136,6 +136,9 @@ git add -A && git commit -m "..."
 | `episodes` | RL updates per seed | ↑ = more training (also more drift with plain REINFORCE) |
 | `rollouts_per_update` | trajectories averaged per update | ↑ = lower‑variance gradient, linearly more compute |
 | `use_critic` | learned `V(s)` vs moving‑average baseline | actor–critic on/off |
-| `stragglers` *(v0.2)* | heterogeneous device speeds + deadline; late updates dropped | on = timing matters; the policy sees device speed |
+| `stragglers` *(v0.2)* | heterogeneous device speeds + deadline; clients train only what fits, dropped if < 1 epoch | on = timing matters; the policy sees device speed |
 | `straggler_frac` / `straggler_slowdown` | how many clients are slow, and by how much | ↑ = more/worse stragglers to route around |
-| `deadline_slack` | round deadline ÷ a fast client's fair‑share time | ↓ = tighter deadline, more drops |
+| `deadline_slack` | round deadline ÷ a fast client's fair‑share time | ↓ = tighter deadline, fewer epochs land, more drops |
+| `drop_penalty` *(v0.2.1)* | dense reward penalty per dropped update | ↑ = policy avoids stragglers harder |
+| `adv_std_floor` / `adv_clip` *(v0.2.1)* | floor on advantage‑normalisation denom; clip on normalised advantage | guard against divide‑by‑tiny‑std gradient blow‑ups |
+| `entropy_final_frac` *(v0.2.1)* | entropy_coeff decays to this fraction of its start by the last episode | ↓ = more exploitation late in training |

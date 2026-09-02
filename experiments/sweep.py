@@ -74,9 +74,10 @@ def main():
                                "per_seed": per_seed, "summary": summary}, indent=2))
     print(f"\nsaved {out}   ({time.time() - t0:.1f}s)")
 
+    png = out.with_name(f"sweep_results{tag}.png")
     try:
-        _plot(per_seed, summary, out.with_name("sweep_results.png"))
-        print(f"saved {out.with_name('sweep_results.png')}")
+        _plot(per_seed, summary, png)
+        print(f"saved {png}")
     except Exception as e:
         print(f"(plot skipped: {e})")
 

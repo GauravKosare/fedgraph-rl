@@ -86,14 +86,17 @@ class ValueNet:
 class ReinforceController:
     def __init__(self, env, *, lr: float = 0.01, gamma: float = 0.98,
                  entropy_coeff: float = 0.01, use_critic: bool = False,
-                 critic_lr: float = 0.02, seed: int = 0):
+                 critic_lr: float = 0.02, adv_std_floor: float = 1.0,
+                 adv_clip: float = 8.0, seed: int = 0):
         self.env = env
         self.pi = PolicyNet(env.feature_dim, seed=seed)
         self.lr = lr
         self.gamma = gamma
-        self.entropy_coeff = entropy_coeff
+        self.entropy_coeff = entropy_coeff          # current value; anneal externally
         self.use_critic = use_critic
         self.critic_lr = critic_lr
+        self.adv_std_floor = adv_std_floor
+        self.adv_clip = adv_clip
         critic_in = 3 + 3 * (env.feature_dim - 3)
         self.critic = ValueNet(in_dim=critic_in, seed=seed + 2) if use_critic else None
         self.baseline = 0.0
@@ -172,7 +175,13 @@ class ReinforceController:
             all_returns.append(returns)
         flat = np.concatenate(all_returns)
         self.baseline = 0.9 * self.baseline + 0.1 * flat.mean()
-        std = flat.std() + 1e-8
+        # v0.2.1: additive floor on the normalisation denominator.  When every
+        # return in the batch is near-identical (long runs of zero-reward rounds
+        # under stragglers), dividing by a tiny std turns noise into huge
+        # spurious gradients -- the mechanism behind the seed-207 collapse.
+        # With the v0.1 default (adv_std_floor = 1e-8) this is ~= the original
+        # `std + 1e-8`; with the straggler value (1.0) it is a hard floor.
+        std = max(flat.std(), self.adv_std_floor)
 
         # -- critic: fit V(s) to the observed returns, use it as the baseline ---
         if self.use_critic:
@@ -192,7 +201,7 @@ class ReinforceController:
             for p, g in zip(self.critic.params(), cgrads):
                 np.clip(g, -5.0, 5.0, out=g)
                 p -= self.critic_lr * g / max(cn, 1)
-            adv_std = np.concatenate(advs).std() + 1e-8
+            adv_std = max(np.concatenate(advs).std(), self.adv_std_floor)
 
         grads = [np.zeros_like(p) for p in self.pi.params()]
         n_steps = 0
@@ -201,6 +210,7 @@ class ReinforceController:
                 adv = advs[ti] / adv_std
             else:
                 adv = (returns - self.baseline) / std
+            adv = np.clip(adv, -self.adv_clip, self.adv_clip)
             for meta, a in zip(traj, adv):
                 probs = meta["sel_probs"]
                 chosen = meta["chosen"]

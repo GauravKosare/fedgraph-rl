@@ -200,10 +200,11 @@ No external datasets. No PII. Data regenerated from seed on every run.
 
 ## 9. Future work (versioned)
 
-| Version | Addition | Status | Expected effect |
+| Version | Addition | Status | Result |
 |---|---|---|---|
-| 0.2 | Client stragglers + per‑round wall‑clock deadline | **implemented** — `stragglers` / `straggler_frac` / `straggler_slowdown` / `deadline_slack` in `config.py`; late updates dropped from FedAvg | Timing becomes exploitable → RL should separate from random (single‑seed: RL 0.69 F1 vs random 0.51) |
-| 0.2 | Concept drift (client models decay if not retrained) | planned | Rewards *recency‑aware* scheduling |
+| 0.2 / 0.2.1 | Client stragglers + per‑round wall‑clock deadline; partial participation; REINFORCE stabilisation | **implemented** (`stragglers` etc. in `config.py`) | Instability fixed; RL +0.051 F1 vs random (3/5), +0.115 vs fixed cohort (5/5), but still ties a fraud‑rate heuristic. See README §4.2–4.3. |
+| 0.3 | Payment‑flow data model + money‑weighted metrics (see `TARGET_PROBLEM.md`) | planned | Reframe onto federated mule‑account detection |
+| 0.3 | Concept drift (client models decay if not retrained) | planned | Rewards *recency‑aware* scheduling |
 | 0.3 | Richer state: per‑client gradient norm, embedding drift, update disagreement | More signal for the policy |
 | 0.3 | GraphSAGE sampling layer (mini‑batch, scale past dense adjacency) | Larger graphs |
 | 0.4 | Secure‑aggregation / DP‑SGD cost model | Realistic privacy–utility trade‑off in the reward |

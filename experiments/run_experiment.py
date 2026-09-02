@@ -55,7 +55,8 @@ def make_env(cfg, data, shards, model_cfg, seed):
                         stragglers=cfg.stragglers,
                         straggler_frac=cfg.straggler_frac,
                         straggler_slowdown=cfg.straggler_slowdown,
-                        deadline_slack=cfg.deadline_slack, seed=seed)
+                        deadline_slack=cfg.deadline_slack,
+                        drop_penalty=cfg.drop_penalty, seed=seed)
 
 
 def run_once(cfg: Config, seed: int, verbose: bool = True):
@@ -75,11 +76,23 @@ def run_once(cfg: Config, seed: int, verbose: bool = True):
             print(f"  client {i}: {len(s)} nodes, shard fraud rate {data.labels[s].mean():.3f}")
 
     env = make_env(cfg, data, shards, model_cfg, seed=seed)
+    # v0.2.1 advantage guards apply only on the straggler path so the v0.1
+    # canonical numbers stay reproducible (defaults below are no-ops).
+    adv_floor = cfg.adv_std_floor if cfg.stragglers else 1e-8
+    adv_clip = cfg.adv_clip if cfg.stragglers else 1e9
     agent = ReinforceController(env, lr=cfg.lr, entropy_coeff=cfg.entropy_coeff,
                                 use_critic=cfg.use_critic, critic_lr=cfg.critic_lr,
+                                adv_std_floor=adv_floor, adv_clip=adv_clip,
                                 seed=seed)
     history = []
     for ep in range(cfg.episodes):
+        # v0.2.1 stabilisation (straggler path only -- keeps the v0.1 canonical
+        # run byte-identical): linearly anneal exploration, high early / clean
+        # exploitation late.
+        if cfg.stragglers:
+            frac = 1.0 - ep / max(cfg.episodes - 1, 1)
+            agent.entropy_coeff = cfg.entropy_coeff * (
+                cfg.entropy_final_frac + (1.0 - cfg.entropy_final_frac) * frac)
         ret, info = agent.run_episode(train=True, rollouts=cfg.rollouts_per_update)
         history.append({"episode": ep, "return": ret, "val_f1": info["val_f1"]})
         if verbose and (ep % 5 == 0 or ep == cfg.episodes - 1):

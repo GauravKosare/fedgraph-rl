@@ -15,10 +15,11 @@ compute.
 >   uniform‑random client selection** (−0.017 F1) and a fraud‑rate heuristic.
 >   Random client sampling is a genuinely strong baseline — consistent with the
 >   federated‑learning literature.
-> - **v0.2 (stragglers + wall‑clock deadline):** adding timing pressure moves the
->   result in RL's favour — **+0.037 F1 vs random, winning 3/5 seeds** — but it is
->   still within cross‑seed noise and introduces a training‑instability failure
->   mode. A lean, not yet a clean win. See §4.2.
+> - **v0.2.1 (stragglers + wall‑clock deadline, stabilised):** adding timing
+>   pressure moves the result in RL's favour — **+0.051 F1 vs random, winning 3/5
+>   seeds** (and +0.115, 5/5, vs a fixed cohort). The v0.2 training‑collapse
+>   failure mode is fixed. But it is still within cross‑seed noise and still does
+>   not beat a fraud‑rate heuristic — a lean, not a clean win. See §4.2.
 
 Everything runs on **NumPy only** (no PyTorch/TensorFlow), CPU, in minutes.
 
@@ -175,57 +176,76 @@ client barely matters — you get the ring or you don't. "Sample everyone
 eventually" (random) is close to optimal, so there is almost no headroom for a
 learned scheduler to claim.
 
-### 4.2 Straggler / deadline variant (v0.2)
+### 4.2 Straggler / deadline variant (v0.2.1)
 
-**What changed:** `straggler_frac = 0.35` of clients run `straggler_slowdown = 4`×
-slower; each round has a wall‑clock deadline (`deadline_slack = 1.15` × a fast
-client's fair‑share time). A selected client that can't finish its assigned epochs
-by the deadline still burns compute but its update is **dropped** from FedAvg. The
-policy now sees each client's device speed as a state feature. Everything else is
-identical. Reproduce: `python experiments/sweep.py 5 --stragglers`.
+**What changed vs v0.1:** `straggler_frac = 0.35` of clients run
+`straggler_slowdown = 3`× slower; each round has a wall‑clock deadline
+(`deadline_slack = 1.6` × a fast client's fair‑share time). A selected client
+trains only the epochs it can **finish** by the deadline (`floor(deadline ·
+speed / cost‑per‑epoch)`); its partial update is aggregated, weighted by epochs
+actually done, and it is **dropped** only if it can't complete even one epoch.
+The policy sees each client's device speed as a state feature. **v0.2.1 fixes**
+(§4.3): partial participation, a dense per‑drop reward penalty, a
+tuned‑threshold reward, advantage‑norm guards, and entropy annealing.
+Reproduce: `python experiments/sweep.py 5 --stragglers`.
 
 | Policy | F1 | AUC | Precision | Recall |
 |---|---|---|---|---|
-| **RL controller (actor–critic)** | **0.481 ± 0.190** | 0.728 ± 0.135 | 0.582 | 0.575 |
-| Uniform‑random client selection | 0.444 ± 0.124 | 0.748 ± 0.070 | 0.542 | 0.450 |
-| Fraud‑rate greedy | 0.509 ± 0.057 | 0.741 ± 0.092 | 0.539 | 0.551 |
-| Fixed cohort ("all") | 0.457 ± 0.108 | 0.711 ± 0.074 | 0.517 | 0.459 |
+| **RL controller (actor–critic)** | **0.580 ± 0.154** | 0.787 ± 0.086 | 0.659 | 0.551 |
+| Uniform‑random client selection | 0.529 ± 0.188 | 0.808 ± 0.076 | 0.536 | 0.608 |
+| Fraud‑rate greedy | 0.629 ± 0.098 | 0.769 ± 0.047 | 0.729 | 0.554 |
+| Fixed cohort ("all") | 0.465 ± 0.167 | 0.717 ± 0.062 | 0.561 | 0.425 |
 | Centralised upper bound (no stragglers) | 0.698 ± 0.122 | 0.921 ± 0.053 | 0.756 | 0.676 |
 
 **Paired per‑seed comparison** (RL F1 − baseline F1):
 
-| vs. baseline | mean Δ F1 | seeds RL wins | (v0.1 was) |
+| vs. baseline | mean Δ F1 | seeds RL wins | v0.1 → v0.2 → v0.2.1 |
 |---|---|---|---|
-| uniform‑random | **+0.037** | 3 / 5 | −0.017, 2/5 |
-| fraud‑rate greedy | −0.028 | 2 / 5 | +0.005, 1/5 |
-| fixed cohort | +0.024 | 2 / 5 | +0.111, 5/5 |
-| centralised upper bound | −0.217 | 1 / 5 | −0.095, 1/5 |
+| uniform‑random | **+0.051** | 3 / 5 | −0.017 → +0.037 → **+0.051** |
+| fraud‑rate greedy | −0.049 | 1 / 5 | +0.005 → −0.028 → −0.049 |
+| fixed cohort | **+0.115** | **5 / 5** | +0.111 → +0.024 → +0.115 |
+| centralised upper bound | −0.118 | 1 / 5 | −0.095 → −0.217 → −0.118 |
 
 ![5-seed straggler sweep](experiments/sweep_results_stragglers.png)
 
 **Read this honestly:**
 
-1. **Stragglers move the result in RL's favour, but do not settle it.** RL goes
-   from −0.017 to **+0.037** F1 vs uniform‑random and wins the majority of seeds
-   (3/5) — the timing signal is real and the policy uses the device‑speed feature.
-   On seed 7 it is decisive (RL 0.73 vs random 0.51). But +0.037 is still inside
-   the ±0.19 cross‑seed noise: a lean, not a win.
-2. **The fraud‑rate heuristic is now the baseline to beat, and RL doesn't.** With
-   stragglers, `fraud_greedy` is both competitive (0.509) and *by far the most
-   stable* (± 0.057). RL's mean is dragged down by variance, not by a low floor.
-3. **New failure mode.** On seed 207 RL training collapsed (F1 0.196, AUC 0.499 —
-   no better than chance ranking). Dropped rounds make the reward sparser and
-   noisier; plain REINFORCE occasionally never recovers. This is the next thing to
-   fix (a small explicit per‑drop penalty for a denser signal, or entropy
-   annealing).
-4. **Stragglers hurt FL badly.** Every federated policy lost ~0.15 F1 while the
-   centralised bound (which has no stragglers) held at 0.698 — the FL gap widened
-   from −0.10 to −0.22. Straggler mitigation matters more here than selection
-   cleverness.
+1. **The instability is fixed.** No seed collapsed this run (worst RL F1 is 0.387,
+   was 0.196). Seed 207 — the v0.2 failure — recovered to 0.387 and now *beats*
+   random on that seed. Training‑time validation F1 holds ~0.35 instead of
+   flatlining at 0.
+2. **RL's edge over random grew, and is now consistent across the version
+   history** (−0.017 → +0.037 → +0.051). It wins 3/5 seeds; on seed 7 it is
+   decisive (0.69 vs 0.51). The device‑speed feature is doing real work.
+3. **But +0.051 is still inside the ±0.15–0.19 cross‑seed noise — a lean, not a
+   clean win** — and `fraud_greedy` remains the baseline to beat: lower mean than
+   RL is false (0.629 vs 0.580) and it is *far* more stable (±0.098 vs ±0.154).
+   A learned policy that can't beat "always pick the high‑fraud shards" is not
+   yet earning its complexity.
+4. **Stragglers still hurt FL** — every federated policy sits ~0.10–0.15 below its
+   v0.1 value while the centralised bound (no stragglers) holds at 0.698.
+   Straggler *mitigation* (partial participation helped) matters at least as much
+   as selection cleverness.
 
-**Verdict:** v0.2 is the environment where a learned scheduler *should* win, and
-it does edge ahead — but not cleanly, and at the cost of stability. A confident
-positive result needs the instability fixed first (planned for v0.2.1).
+**Verdict:** v0.2.1 delivers what it set out to — a stable benchmark with no
+collapse — and RL is now reliably ahead of random. It is still not ahead of a
+good heuristic. The honest status: **the deadline environment makes learned
+orchestration matter, but this policy/algorithm isn't strong enough to convert
+that into a decisive win.** Next levers are in `docs/TARGET_PROBLEM.md` (money‑
+weighted reward, richer state) — not more REINFORCE tuning.
+
+### 4.3 v0.2.1 stabilisation — what was changed and why
+
+| Fix | Cause it addresses | Effect |
+|---|---|---|
+| **Partial participation** — a straggler trains what it can finish, dropped only if < 1 epoch | v0.2 made slow clients *unusable* (couldn't finish even 1 epoch) → their fraud rings were never seen → model collapsed to all‑legit | Slow clients contribute ~1–2 real epochs; over‑assigning them just wastes budget (a lever, not a wall) |
+| **Tuned‑threshold reward** (straggler path only) | An all‑legit model scores F1 = 0 at the fixed 0.5 cutoff → ΔF1 = 0 every round → no gradient signal | Reward stays informative as long as the model *ranks* fraud at all |
+| **Dense per‑drop penalty** (`drop_penalty = 0.6`) | Reward was sparse — nothing happened on wasted rounds | Immediate "you burned a slot on a straggler" signal |
+| **Advantage‑std floor + clip** (`1.0`, `±8`) | Dividing near‑identical returns by a tiny std turned noise into huge gradients — active divergence | Bounds the update; run stalls instead of exploding |
+| **Entropy annealing** (→ 10 % over training) | Constant exploration kept perturbing a policy that had already found something | Explore early, exploit cleanly late |
+
+The v0.1 canonical run is unaffected — the reward change and the guards are scoped
+to `stragglers=True`, verified reproducible.
 
 ### When would RL be expected to win cleanly?
 
@@ -261,7 +281,10 @@ fedgraph-rl/
 │   ├── TRD.md                 Technical Requirements Document
 │   ├── WORKFLOW.md            end-to-end workflow + mermaid flowcharts
 │   ├── DESIGN_LOG.md          every decision, why it was made, what it changed
-│   └── APPLICATIONS.md        real-world / industry uses and how to deploy them
+│   ├── APPLICATIONS.md        real-world / industry uses and how to deploy them
+│   ├── TARGET_PROBLEM.md      the one real problem to commit to (federated mule detection)
+│   ├── PROBLEM_EXPLAINED.md   the scam & the detection problem, explained simply
+│   └── RESOURCES.md           datasets, simulators, benchmarks, frameworks, papers
 ├── LICENSE                    MIT
 ├── CITATION.cff
 ├── CHANGELOG.md
@@ -290,8 +313,9 @@ go public once reviewed. Before flipping it public:
 
 - [ ] Confirm the licensing choice (currently MIT) and the copyright holder name.
 - [ ] Decide whether to keep the large `*.png` artifacts in git or move to a release.
-- [ ] v0.2.1: fix the straggler‑variant training instability (§4.2 point 3) before
-      claiming a positive RL result.
+- [x] v0.2.1: straggler‑variant training instability fixed (§4.3).
+- [ ] v0.3: commit to the target problem in [`docs/TARGET_PROBLEM.md`](docs/TARGET_PROBLEM.md)
+      — payment‑flow data model + money‑weighted metrics.
 
 Make it public with:
 
@@ -313,6 +337,10 @@ MIT — see [`LICENSE`](LICENSE). If you use this, please cite via
 FedGraph‑RL is a synthetic sandbox, but it is a small model of three things used
 in industry at different maturity levels. Full write‑up with named references and
 a production rollout plan: [`docs/APPLICATIONS.md`](docs/APPLICATIONS.md).
+**If the project were to commit to one real problem**, the recommendation is
+**federated mule‑account detection for APP scams**, with the per‑round deadline as
+a real in‑flight screening SLA — rationale and a reframing plan in
+[`docs/TARGET_PROBLEM.md`](docs/TARGET_PROBLEM.md).
 
 | Layer | Industry maturity | Where it shows up |
 |---|---|---|

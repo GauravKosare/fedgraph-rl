@@ -24,8 +24,14 @@ class Config:
     # v0.2 -- stragglers & per-round wall-clock deadline (opt-in; v0.1 canonical run keeps this off)
     stragglers: bool = False           # heterogeneous device speeds + late-update drop
     straggler_frac: float = 0.35       # fraction of clients that are "slow"
-    straggler_slowdown: float = 4.0    # slow clients run this many x slower
-    deadline_slack: float = 1.15       # round deadline = slack x (fast client's fair-share time)
+    straggler_slowdown: float = 3.0    # slow clients run this many x slower
+    deadline_slack: float = 1.6        # round deadline = slack x (fast client's fair-share time)
+    drop_penalty: float = 0.6          # v0.2.1: dense reward penalty per dropped (late) update
+
+    # v0.2.1 -- REINFORCE stabilisation
+    adv_std_floor: float = 1.0         # floor on the advantage-normalisation denominator
+    adv_clip: float = 8.0              # clip normalised advantages to +/- this
+    entropy_final_frac: float = 0.1    # entropy_coeff decays linearly to this fraction by the last episode
 
     # RL training
     episodes: int = 50

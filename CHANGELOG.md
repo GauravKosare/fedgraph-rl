@@ -3,35 +3,44 @@
 All notable changes to this project are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
-## [0.2.0] — unreleased
+## [0.2.1] — unreleased
 
-### Added
-- **Straggler / deadline environment variant** (`FederatedEnv`, `Config`).
-  Clients now have heterogeneous device speeds (`straggler_frac` of them run
-  `straggler_slowdown`× slower). Each round has a wall-clock deadline
-  (`deadline_slack` × a fast client's fair-share time). A selected client whose
-  `epochs / speed` work time exceeds the deadline still burns compute (counted as
-  cost) but its update is **dropped** from FedAvg. If every selected client is
-  late, the round is wasted.
-- Device speed added as a 5th per-client state feature; `feature_dim` 7 → 8.
-  `ValueNet` input dimension now derived from `feature_dim` instead of hard-coded.
-- `info["dropped"]` — count of late/dropped updates per round.
-- `stragglers=False` recovers exact v0.1 behaviour.
+Fixes the v0.2 straggler-variant training collapse; adds the target-problem and
+resource docs.
 
-### Rationale
-v0.1 showed the RL controller could not beat uniform-random client selection
-because the task had no timing structure to exploit. Stragglers + a deadline make
-*when* and *how hard* each client trains genuinely consequential — the policy sees
-device speed and can avoid wasting rounds on slow clients while still covering the
-fraud rings they hold.
+### Changed — straggler mechanics
+- **Partial participation.** A selected client now trains the number of epochs it
+  can *finish* before the deadline (`floor(deadline · speed / cost-per-epoch)`);
+  its partial update is aggregated, compute-weighted by epochs done. It is
+  *dropped* only if it can't complete even one epoch. (Was all-or-nothing.)
+- Gentler defaults: `straggler_slowdown 4 → 3`, `deadline_slack 1.15 → 1.6`.
+- Cost is now the deadline-capped compute actually burned, computed in the env.
+
+### Added — REINFORCE stabilisation (straggler path only; v0.1 untouched)
+- `drop_penalty` (0.6) — dense reward penalty per dropped update.
+- Tuned-threshold reward: `ΔF1` at the best validation threshold, not 0.5, so a
+  conservative model still gives signal. New `best_f1_threshold` (vectorised,
+  ~40× faster than the old unique-value scan) and `FederatedServer.val_f1_tuned`.
+- `adv_std_floor` (1.0) and `adv_clip` (±8) — guard the advantage normalisation.
+- Entropy annealing to `entropy_final_frac` (10 %) of the start value.
+- `info["partial"]` — count of partial (deadline-truncated) updates per round.
+
+### Added — docs
+- `docs/TARGET_PROBLEM.md` — recommendation to commit the project to *federated
+  mule-account detection for APP scams*, with rationale and a reframing plan.
+- `docs/PROBLEM_EXPLAINED.md` — the scam and the detection problem explained
+  simply (incl. ELI5, why it matters, the fraud lifecycle).
+- `docs/RESOURCES.md` — datasets, simulators (AMLSim, PaySim), benchmarks
+  (GADBench, DGFraud), the PETs Prize Challenge, FL frameworks, papers.
 
 ### Results (5 seeds, `sweep.py 5 --stragglers`)
-- RL vs uniform‑random: **+0.037 F1, wins 3/5 seeds** (v0.1 was −0.017, 2/5) —
-  timing pressure moves the result toward RL but stays within cross‑seed noise.
-- RL 0.481 ± 0.190 · random 0.444 ± 0.124 · fraud_greedy 0.509 ± 0.057.
-- New instability: one seed's RL training collapsed (F1 0.196). Tracked as v0.2.1.
-- All FL policies lost ~0.15 F1 vs v0.1; centralised bound (no stragglers) unchanged.
-See README §4.2 and `experiments/*_stragglers.*`.
+- **Instability fixed** — no seed collapsed (worst RL F1 0.387, was 0.196). Seed
+  207 recovered to 0.387 and now beats random on that seed.
+- RL vs uniform-random: **+0.051 F1, wins 3/5** (history: −0.017 → +0.037 → +0.051).
+- RL vs fixed cohort: **+0.115 F1, wins 5/5**.
+- RL 0.580 ± 0.154 · random 0.529 ± 0.188 · fraud_greedy 0.629 ± 0.098.
+- RL still does **not** beat the fraud-rate heuristic (−0.049, 1/5) — a lean, not
+  a clean win. Next levers are in `docs/TARGET_PROBLEM.md`, not more RL tuning.
 
 ---
 

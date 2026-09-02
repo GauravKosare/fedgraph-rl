@@ -301,3 +301,43 @@ correct but under‑powered as built. Before `v0.2` can claim a positive RL resu
 it needs the instability fixed — candidates: a small explicit per‑drop reward
 penalty (denser signal), entropy annealing, or more rollouts on the sparse‑reward
 seeds. Tracked as `v0.2.1`.
+
+---
+
+## 16. v0.2.1 — fixing the straggler‑variant training collapse
+
+**Problem.** Under stragglers (§15), seed 207 trained to a degenerate model
+(F1 0.196, AUC ≈ 0.5 — no better than chance). Diagnosis had three parts:
+
+1. **All‑or‑nothing drops made slow clients unusable.** With `slowdown = 4×` and
+   `deadline_slack = 1.15`, a slow client could not finish *even one* epoch before
+   the deadline — so it was always dropped. The only way to use its data was to
+   never select it, which on seed 207 meant never seeing the fraud rings those
+   clients held. The global model then collapsed to predicting "legit"
+   everywhere.
+2. **A collapsed model gives a zero reward signal.** Reward was `ΔF1` at the fixed
+   0.5 threshold. An all‑legit model scores F1 = 0 *every round* → `ΔF1 = 0` →
+   the policy gradient sees nothing but noise.
+3. **Advantage normalisation amplified that noise.** Dividing near‑identical
+   returns by a tiny standard deviation turns rounding noise into large spurious
+   gradients — which is how a run *actively* diverges rather than just stalling.
+
+**Fixes (all behind config knobs; `stragglers=False` keeps v0.1 untouched):**
+
+| Fix | What it does |
+|---|---|
+| **Partial participation** | A selected client now trains the number of epochs it can *finish* by the deadline (`floor(deadline · speed / cost‑per‑epoch)`); it is only *dropped* if that is < 1. Its partial update is aggregated, compute‑weighted by epochs actually done. Assigning a slow client more epochs than it can finish just wastes budget — a lever the policy can learn, not a wall. |
+| **Gentler straggler params** | `slowdown 4 → 3`, `deadline_slack 1.15 → 1.6`, so a slow client contributes ~1–2 real epochs instead of zero. |
+| **Tuned‑threshold reward** (straggler mode only) | Reward is now `ΔF1` at the *best validation threshold*, not at 0.5. A conservative‑but‑ranking model scores > 0, so `ΔF1` stays informative. (Vectorised `best_f1_threshold` — also ~40× faster than the old unique‑value scan, which matters now that it runs every round.) |
+| **Dense per‑drop penalty** | `reward −= drop_penalty · n_dropped` (`drop_penalty = 0.6`). Immediate feedback for wasting a slot on a straggler, even when F1 doesn't move. |
+| **Advantage‑std floor + clip** | Normalisation denominator floored at `adv_std_floor = 1.0`; normalised advantages clipped to `± adv_clip = 8`. Stops the divide‑by‑tiny‑std blow‑up. |
+| **Entropy annealing** | `entropy_coeff` decays linearly to 10 % of its start value over training — explore early, exploit cleanly late. |
+
+**Result.** Seed 207 no longer collapses (train val‑F1 holds ~0.35 instead of
+0.00; test F1 0.39 vs the old 0.20, and it now *beats* random on that seed). Full
+5‑seed numbers: README §4.2.
+
+**Trade‑off noted.** The tuned‑threshold reward and the stabilisation knobs are a
+mild change to the learning dynamics, so the v0.1 canonical sweep was re‑run with
+them too (reward still fixed‑0.5 on the no‑straggler path); the v0.1 conclusion is
+unchanged.
