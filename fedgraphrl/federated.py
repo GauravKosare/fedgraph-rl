@@ -8,7 +8,8 @@ import numpy as np
 from .autograd import Tensor
 from .data import GraphData
 from .gnn import GCN, SGD
-from .metrics import binary_scores, best_f1_threshold
+from .metrics import (binary_scores, best_f1_threshold,
+                      money_weighted_scores, best_threshold_at_fp)
 
 
 @dataclass
@@ -120,3 +121,24 @@ class FederatedServer:
         d = self.global_data
         proba = self.model.predict_proba(d.features, d.adj)[:, 1]
         return best_f1_threshold(d.labels[d.val_mask], proba[d.val_mask])[0]
+
+    # -- v0.3 money-weighted evaluation --------------------------------
+    def evaluate_money(self, split: str = "val", fp_budget: float = 0.02,
+                       threshold: float | None = None) -> dict:
+        d = self.global_data
+        mask = {"train": d.train_mask, "val": d.val_mask, "test": d.test_mask}[split]
+        proba = self.model.predict_proba(d.features, d.adj)[:, 1]
+        aar = (d.amount_at_risk if d.amount_at_risk is not None
+               else np.ones(d.num_nodes))
+        return money_weighted_scores(d.labels[mask], proba[mask], aar[mask],
+                                     fp_budget=fp_budget, threshold=threshold)
+
+    def val_money_recall(self, fp_budget: float = 0.02) -> float:
+        """Validation money-recall at the FP-budget threshold. RL reward for the
+        v0.3 payment-flow task."""
+        return self.evaluate_money("val", fp_budget=fp_budget)["money_recall"]
+
+    def tuned_threshold_money(self, fp_budget: float = 0.02) -> float:
+        d = self.global_data
+        proba = self.model.predict_proba(d.features, d.adj)[:, 1]
+        return best_threshold_at_fp(d.labels[d.val_mask], proba[d.val_mask], fp_budget)

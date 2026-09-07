@@ -33,6 +33,7 @@ class FederatedEnv:
                  cost_slack: float = 1.2, stragglers: bool = False,
                  straggler_frac: float = 0.35, straggler_slowdown: float = 4.0,
                  deadline_slack: float = 1.15, drop_penalty: float = 0.6,
+                 reward_mode: str = "f1", fp_budget: float = 0.02,
                  seed: int = 0):
         self.global_data = global_data
         self.model_cfg = model_cfg
@@ -42,6 +43,8 @@ class FederatedEnv:
         self.cost_coeff = cost_coeff
         self.stragglers = stragglers
         self.drop_penalty = drop_penalty
+        self.reward_mode = reward_mode          # "f1" (v0.1/v0.2) | "money" (v0.3)
+        self.fp_budget = fp_budget
         self.rng = np.random.default_rng(seed)
         # `shards` may be node-index arrays (from partition_non_iid) or ready GraphData
         shard_graphs = [global_data.subgraph(s) if isinstance(s, np.ndarray) else s
@@ -91,13 +94,15 @@ class FederatedEnv:
         return self._state()
 
     def _val_f1(self) -> float:
+        # The per-round reward signal (Δof this, ×100).
+        # v0.3: money-recall at the FP-budget threshold -- what a bank optimises.
+        if self.reward_mode == "money":
+            return self.server.val_money_recall(self.fp_budget)
         # v0.2.1: under stragglers, reward on the *tuned-threshold* validation F1.
         # A conservative global model (common when stragglers hide the fraud-heavy
         # shards) scores 0 at the fixed 0.5 cutoff -> ΔF1 == 0 every round -> no
-        # learning signal.  Scoring at the best validation threshold keeps the
-        # reward informative as long as the model *ranks* fraud at all.
-        # The v0.1 (no-straggler) path keeps the original fixed-0.5 reward so its
-        # published numbers stay reproducible.
+        # learning signal.  The v0.1 (no-straggler) path keeps the original
+        # fixed-0.5 reward so its published numbers stay reproducible.
         if self.stragglers:
             return self.server.val_f1_tuned()
         return self.server.evaluate("val")["f1"]
@@ -169,8 +174,13 @@ class FederatedEnv:
         done = self.t >= self.max_rounds
         test_metrics = None
         if done:
-            t = self.server.tuned_threshold()
-            test_metrics = self.server.evaluate("test", threshold=t)
+            if self.reward_mode == "money":
+                thr = self.server.tuned_threshold_money(self.fp_budget)
+                test_metrics = self.server.evaluate_money("test", fp_budget=self.fp_budget,
+                                                          threshold=thr)
+            else:
+                thr = self.server.tuned_threshold()
+                test_metrics = self.server.evaluate("test", threshold=thr)
         info = {"val_f1": f1, "cost": total_cost, "dropped": n_dropped,
                 "partial": n_partial, "test": test_metrics}
         return self._state(), reward, done, info

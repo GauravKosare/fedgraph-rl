@@ -247,13 +247,70 @@ weighted reward, richer state) — not more REINFORCE tuning.
 The v0.1 canonical run is unaffected — the reward change and the guards are scoped
 to `stragglers=True`, verified reproducible.
 
+### 4.4 v0.3 — the problem reframing (payment‑flow data + money‑weighted reward)
+
+v0.1–v0.2.1 used a generic graph and an F1 reward. v0.3 replaces the **problem**
+with a realistic model of federated mule‑account detection (see
+[`docs/TARGET_PROBLEM.md`](docs/TARGET_PROBLEM.md)):
+
+- **Payment‑flow graph** (`fedgraphrl/payment_data.py`): directed
+  `victim → 1st‑hop mule → layering mules → cash‑out`. Labels mark the mules (what
+  the *receiving* bank must catch); the victim is not fraud. Two of six banks are
+  "high‑risk" (receive ~75 % of mule accounts); ~10 % of legit accounts are
+  high‑throughput **merchant / payroll decoys**.
+- **Bank‑ownership split** (`partition_by_bank`): the non‑IID structure **is** the
+  ownership — victim and first‑hop mule are at different banks ~90 % of the time.
+  No Dirichlet knob.
+- **Money‑weighted metric & reward** (`money_weighted_scores`): **money‑recall at
+  a false‑positive budget** — £ at risk on caught mules ÷ total £ at risk,
+  measured at the threshold that maximises catches while keeping the
+  frozen‑legit‑account rate ≤ 5 %. Reward = Δ(val money‑recall) × 100.
+
+Reproduce: `python experiments/run_payment_experiment.py 5`.
+
+| Policy | money‑recall @ 5% FP (5 seeds) | vs RL, paired |
+|---|---|---|
+| **RL controller** | **0.639 ± 0.052** | — |
+| Uniform‑random | 0.639 ± 0.071 | −0.000, RL wins 3/5 |
+| Fraud‑rate greedy (only high‑risk banks) | 0.508 ± 0.086 | **+0.131, RL wins 5/5** |
+| Fixed cohort | 0.508 ± 0.086 | **+0.131, RL wins 5/5** |
+| Centralised (pooled) reference † | 0.262 ± 0.144 | +0.377, RL wins 5/5 |
+
+† *not an upper bound here — per‑bank subgraph training + FedAvg regularisation
+ranks mules better (AUC ~0.87) than one GCN over the whole noisy graph
+(AUC ~0.78), and money‑recall at a tight FP budget is very sensitive to the top
+of the ranking. Improving the pooled baseline (neighbour sampling, deeper net) is
+future work.*
+
+**The headline did not change.** Learned orchestration is an **exact tie with
+uniform‑random** on money‑recall (0.639 vs 0.639), though the RL policy is
+slightly more *consistent* (±0.052 vs ±0.071). Both beat the fixed‑cohort
+strategies by **+0.13** — "always pick the two high‑risk banks" catches the
+first‑hop mules but misses the layering mules deliberately spread across ordinary
+banks. The learning curve is flat: 2‑of‑6 banks per round over 25 rounds is not
+scarce enough for scheduling to matter.
+
+**What v0.3 delivers** is a *defensible benchmark*: realistic non‑IID structure,
+a cost that is money not F1‑points, decoys that create real false‑positive
+pressure, and evaluation in the units a bank actually reports. The RL tie is
+itself the finding — **the environment has to make coverage genuinely scarce**
+before a learned scheduler earns its complexity (v0.3.1: stragglers on for the
+payment task, fewer rounds, or a per‑cycle screening‑latency budget).
+
 ### When would RL be expected to win cleanly?
 
-Building on §4.2: fix the training instability, then add the other timing
-pressures — client dropouts, concept drift so recently‑trained clients decay, a
-communication budget tight enough that "train everyone eventually" is infeasible.
-Those are the conditions under which FL client selection is a genuinely open
-research problem.
+Fix the training instability (done, §4.3), then add pressures that make *timing*
+carry reward — client dropouts, concept drift, a communication budget tight
+enough that "train everyone eventually" is infeasible, or the scarce‑coverage
+regime above. Those are the conditions under which FL client selection is a
+genuinely open research problem.
+
+### AI · MLOps · Cloud
+
+The plan to wrap this in a GenAI investigation layer (LLM SAR‑narrative drafting
++ typology RAG), MLOps plumbing (MLflow, DVC, CI/CD, serving, drift monitoring),
+and a cloud deployment mirroring the real federated topology is captured in
+[`docs/AI_MLOPS_CLOUD.md`](docs/AI_MLOPS_CLOUD.md) — not yet built.
 
 ---
 
@@ -263,28 +320,30 @@ research problem.
 fedgraph-rl/
 ├── fedgraphrl/                package (NumPy only)
 │   ├── autograd.py            ~150-line reverse-mode autograd engine
-│   ├── data.py                synthetic transaction graph, planted fraud rings, non-IID sharding
+│   ├── data.py                v0.1/v0.2 graph: planted fraud rings, Dirichlet non-IID sharding
+│   ├── payment_data.py        v0.3 payment-flow graph (victim→mule→layering→cash-out) + partition_by_bank
 │   ├── gnn.py                 2-layer GCN node classifier + SGD
 │   ├── federated.py           FederatedClient / FederatedServer / FedAvg / threshold tuning
 │   ├── environment.py         FederatedEnv — federated orchestration as an RL environment
 │   ├── rl_controller.py       PolicyNet, ValueNet, ReinforceController (+ actor-critic), HeuristicController
 │   └── config.py              every hyper-parameter, one dataclass
 ├── experiments/
-│   ├── run_experiment.py      single-seed: train controller, compare to baselines, plot
-│   ├── sweep.py               multi-seed: mean ± std + paired comparison + plot ( --stragglers for v0.2 )
-│   ├── results.json/.png              single-seed artifacts, v0.1 (committed)
-│   ├── sweep_results.json/.png        5-seed artifacts, v0.1 (committed)
-│   ├── results_stragglers.json/.png       single-seed artifacts, v0.2 (committed)
-│   └── sweep_results_stragglers.json/.png 5-seed artifacts, v0.2 (committed)
-├── tests/test_autograd.py     finite-difference gradient check + federated-round smoke test
+│   ├── run_experiment.py         v0.1/v0.2 single-seed: train controller, compare to baselines, plot
+│   ├── sweep.py                  v0.1/v0.2 multi-seed: mean ± std + paired comparison ( --stragglers for v0.2 )
+│   ├── run_payment_experiment.py v0.3: payment-flow data + money-weighted metric ( arg = n_seeds )
+│   ├── results*.json/.png              v0.1 artifacts (committed)
+│   ├── sweep_results*.json/.png        v0.1 / v0.2 5-seed artifacts (committed)
+│   └── results_payment*.json/.png      v0.3 artifacts (committed)
+├── tests/test_autograd.py     gradient check + federated-round + payment-flow smoke tests
 ├── docs/
 │   ├── TRD.md                 Technical Requirements Document
 │   ├── WORKFLOW.md            end-to-end workflow + mermaid flowcharts
-│   ├── DESIGN_LOG.md          every decision, why it was made, what it changed
+│   ├── DESIGN_LOG.md          every decision, why it was made, what it changed (v0.1 → v0.3)
 │   ├── APPLICATIONS.md        real-world / industry uses and how to deploy them
 │   ├── TARGET_PROBLEM.md      the one real problem to commit to (federated mule detection)
 │   ├── PROBLEM_EXPLAINED.md   the scam & the detection problem, explained simply
-│   └── RESOURCES.md           datasets, simulators, benchmarks, frameworks, papers
+│   ├── RESOURCES.md           datasets, simulators, benchmarks, frameworks, papers
+│   └── AI_MLOPS_CLOUD.md      plan (not built) for the GenAI layer, MLOps, and cloud deployment
 ├── LICENSE                    MIT
 ├── CITATION.cff
 ├── CHANGELOG.md

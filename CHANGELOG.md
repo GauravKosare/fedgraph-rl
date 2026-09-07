@@ -3,6 +3,49 @@
 All notable changes to this project are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.3.0] — unreleased
+
+The problem reframing (see `docs/DESIGN_LOG.md` §17). The RL algorithm is
+unchanged — the *problem* is now a realistic model of federated mule-account
+detection.
+
+### Added
+- **`fedgraphrl/payment_data.py`** — directed payment-flow graph generator:
+  `victim → 1st-hop mule → layering mules → cash-out`. Two of `n_banks` are
+  high-risk (receive ~75% of mule accounts); ~10% of legit accounts are
+  high-throughput "merchant/payroll" decoys. Bank-ownership node features with
+  heavy jitter. `partition_by_bank` — the non-IID split is ownership itself.
+- **`GraphData.amount_at_risk` / `.bank_of`** — optional fields, `None` under the
+  v0.1/v0.2 "rings" model; carried through `subgraph`.
+- **`metrics.money_weighted_scores`** and **`best_threshold_at_fp`** — money-recall
+  (£ at risk on caught mules ÷ total £ at risk) at a false-positive-rate budget.
+- **`FederatedServer.evaluate_money` / `val_money_recall` / `tuned_threshold_money`**.
+- **`FederatedEnv(reward_mode="money", fp_budget=…)`** — reward = Δ(val
+  money-recall at the FP budget) × 100. `reward_mode="f1"` (default) is unchanged.
+- **`experiments/run_payment_experiment.py`** — the v0.3 experiment + sweep.
+- **`Config`**: `data_model`, `n_banks`, `n_scam_episodes`, `reward_mode`,
+  `fp_budget`.
+- **`docs/AI_MLOPS_CLOUD.md`** — plan (not built) for the GenAI layer, MLOps
+  plumbing, and cloud deployment.
+
+### Results (5 seeds, `run_payment_experiment.py 5`)
+- **Exact tie** with uniform-random on money-recall: RL 0.639 ± 0.052 vs random
+  0.639 ± 0.071 (Δ −0.000, RL wins 3/5; RL slightly more consistent).
+- RL **+0.131 money-recall, wins 5/5** vs both fixed-cohort strategies
+  (`fraud_greedy` / `all`, 0.508 ± 0.086) — "always pick the two high-risk banks"
+  misses the layering mules spread across ordinary banks.
+- Flat learning curve — 2-of-6 banks/round over 25 rounds is not scarce enough
+  for scheduling to matter. `docs/TARGET_PROBLEM.md` lists v0.3.1 tighteners.
+- `centralised_pooled` 0.262 ± 0.144 is **not an upper bound** — a single GCN over
+  the whole noisy graph is a weaker ranker (AUC ~0.78) than per-bank training +
+  FedAvg (AUC ~0.87); improving it is future work.
+
+### Unchanged
+- v0.1 / v0.2 / v0.2.1 code paths and their committed artifacts are untouched
+  (`data_model="rings"`, `reward_mode="f1"`).
+
+---
+
 ## [0.2.1] — unreleased
 
 Fixes the v0.2 straggler-variant training collapse; adds the target-problem and

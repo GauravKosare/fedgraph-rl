@@ -341,3 +341,52 @@ seeds. Tracked as `v0.2.1`.
 mild change to the learning dynamics, so the v0.1 canonical sweep was re‑run with
 them too (reward still fixed‑0.5 on the no‑straggler path); the v0.1 conclusion is
 unchanged.
+
+---
+
+## 17. v0.3 — the problem reframing (payment‑flow data + money‑weighted reward)
+
+**Decision.** Stop iterating on the RL algorithm. Replace the *problem*:
+
+- **`payment_data.py`** — a directed **payment‑flow** graph shaped like a real APP
+  scam: `victim → 1st‑hop mule → layering mules → cash‑out`. Labels mark the
+  mule/layering/cash‑out accounts (what the *receiving* bank must catch); the
+  victim is not fraud. Two of six banks are "high‑risk" and receive ~75 % of mule
+  accounts; ~10 % of legit accounts are high‑throughput "merchant/payroll"
+  decoys that look mule‑like. Features are the ones a bank actually has (in/out
+  amount & degree, distinct senders, flow‑through ratio, account age) with heavy
+  jitter so no single feature separates.
+- **`partition_by_bank`** — the federated split **is** account ownership. The
+  victim and the first‑hop mule are at different banks ~90 % of the time, so the
+  non‑IID structure is dictated, not tuned with a Dirichlet knob.
+- **Money‑weighted reward & metric** (`money_weighted_scores`) — every mule node
+  carries `amount_at_risk` (catching the first hop protects the whole episode;
+  catching a downstream node protects only its slice). The metric is
+  **money‑recall at a false‑positive budget**: £ at risk on caught mules ÷ total
+  £ at risk, evaluated at the threshold that maximises catches while keeping the
+  frozen‑legit‑account rate ≤ `fp_budget` (5 %). This is the number a bank's
+  fraud‑ops lead and a regulator actually ask for.
+
+**Why.** v0.1–v0.2.1 established that on a generic graph with an F1 reward, learned
+client selection ties random. The open question was whether a *realistic* problem
+— real non‑IID structure, a cost that is money not F1‑points, decoys that create
+genuine false‑positive pressure — changes that.
+
+**Result (5 seeds).** The headline did **not** change: learned orchestration is an
+**exact tie with uniform‑random** (money‑recall 0.639 ± 0.052 vs 0.639 ± 0.071 —
+RL slightly more consistent), and both beat the fixed‑cohort strategies
+(`fraud_greedy` / `all`, 0.508) by **+0.13 money‑recall, 5/5 seeds** — picking
+only the two high‑risk banks every round misses the layering mules deliberately
+spread to ordinary banks. The learning curve is flat: with 2‑of‑6 banks per round
+over 25 rounds, coverage is not scarce enough for scheduling to matter.
+
+Note: **the pooled‑data model is not an upper bound here** — per‑bank subgraph
+training + FedAvg regularisation ranks mules *better* than one GCN over the whole
+noisy graph. Renamed `centralised_pooled`.
+
+**What v0.3 actually delivers:** a benchmark that is defensible as a model of the
+real problem (`TARGET_PROBLEM.md`), with money‑weighted evaluation. The RL result
+is the same honest tie — which is itself the finding: **a learned scheduler is
+not the lever; the environment has to make timing/coverage genuinely scarce**
+(v0.3.1 candidates: stragglers on for the payment task, or 8 rounds instead of
+25, or a per‑cycle screening‑latency budget).

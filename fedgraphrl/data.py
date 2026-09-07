@@ -23,6 +23,9 @@ class GraphData:
     train_mask: np.ndarray        # (N,) bool
     val_mask: np.ndarray
     test_mask: np.ndarray
+    # v0.3 (payment-flow model) -- optional, None under the v0.1/v0.2 "rings" model
+    amount_at_risk: np.ndarray | None = None   # (N,) money protected by catching this node
+    bank_of: np.ndarray | None = None          # (N,) owning-bank id
 
     @property
     def num_nodes(self) -> int:
@@ -42,6 +45,8 @@ class GraphData:
             train_mask=self.train_mask[node_idx],
             val_mask=self.val_mask[node_idx],
             test_mask=self.test_mask[node_idx],
+            amount_at_risk=None if self.amount_at_risk is None else self.amount_at_risk[node_idx],
+            bank_of=None if self.bank_of is None else self.bank_of[node_idx],
         )
 
 

@@ -1,0 +1,351 @@
+{
+  "config": {
+    "data_model": "payment_flow",
+    "num_accounts": 1200,
+    "num_features": 16,
+    "fraud_ring_count": 12,
+    "num_clients": 8,
+    "dirichlet_alpha": 0.1,
+    "seed": 7,
+    "n_banks": 6,
+    "n_scam_episodes": 55,
+    "reward_mode": "money",
+    "fp_budget": 0.05,
+    "hidden": 32,
+    "dropout": 0.5,
+    "max_rounds": 25,
+    "clients_per_round": 2,
+    "epoch_budget": 12,
+    "cost_coeff": 0.06,
+    "stragglers": false,
+    "straggler_frac": 0.35,
+    "straggler_slowdown": 3.0,
+    "deadline_slack": 1.6,
+    "drop_penalty": 0.6,
+    "adv_std_floor": 1.0,
+    "adv_clip": 8.0,
+    "entropy_final_frac": 0.1,
+    "episodes": 50,
+    "rollouts_per_update": 4,
+    "lr": 0.02,
+    "entropy_coeff": 0.02,
+    "use_critic": true,
+    "critic_lr": 0.03
+  },
+  "per_seed": [
+    {
+      "seed": 7,
+      "results": {
+        "rl_reinforce": {
+          "money_recall": 0.6388930962205136,
+          "recall": 0.42857142857142855,
+          "precision": 0.7343937575030013,
+          "fp_rate": 0.050513022888713496,
+          "f1": 0.5412154270370504,
+          "auc": 0.8737040653886802,
+          "threshold": 0.5827323079342415
+        },
+        "random": {
+          "money_recall": 0.6339956189028485,
+          "money_at_risk_total": 193556.60711675306,
+          "money_at_risk_caught": 122714.04092172135,
+          "fp_rate": 0.049723756906077346,
+          "recall": 0.423728813559322,
+          "precision": 0.7352941176470589,
+          "f1": 0.5376344086021505,
+          "auc": 0.8738645940631146,
+          "threshold": 0.5774656256116095,
+          "fp_budget": 0.05
+        },
+        "fraud_greedy": {
+          "money_recall": 0.5682283822391998,
+          "money_at_risk_total": 193556.60711675306,
+          "money_at_risk_caught": 109984.35773366099,
+          "fp_rate": 0.03867403314917127,
+          "recall": 0.3389830508474576,
+          "precision": 0.7407407407407407,
+          "f1": 0.4651162790697674,
+          "auc": 0.8615975278584137,
+          "threshold": 0.6825422967658376,
+          "fp_budget": 0.05
+        },
+        "all": {
+          "money_recall": 0.5682283822391998,
+          "money_at_risk_total": 193556.60711675306,
+          "money_at_risk_caught": 109984.35773366099,
+          "fp_rate": 0.03867403314917127,
+          "recall": 0.3389830508474576,
+          "precision": 0.7407407407407407,
+          "f1": 0.4651162790697674,
+          "auc": 0.8615975278584137,
+          "threshold": 0.6825422967658376,
+          "fp_budget": 0.05
+        },
+        "centralised_pooled": {
+          "money_recall": 0.4762182014432076,
+          "money_at_risk_total": 193556.60711675306,
+          "money_at_risk_caught": 92175.1793185897,
+          "fp_rate": 0.06077348066298342,
+          "recall": 0.3050847457627119,
+          "precision": 0.6206896551724138,
+          "f1": 0.40909090909090917,
+          "auc": 0.8125292630396105,
+          "threshold": 0.6600089449427307,
+          "fp_budget": 0.05
+        }
+      },
+      "history": [
+        {
+          "episode": 0,
+          "return": 39.53469669779151,
+          "val_signal": 0.6366706121471891
+        },
+        {
+          "episode": 1,
+          "return": 40.5031917422244,
+          "val_signal": 0.5608674944144046
+        },
+        {
+          "episode": 2,
+          "return": 41.17419647226442,
+          "val_signal": 0.6308944763472453
+        },
+        {
+          "episode": 3,
+          "return": 35.20470590201178,
+          "val_signal": 0.5608674944144046
+        },
+        {
+          "episode": 4,
+          "return": 37.48496014142386,
+          "val_signal": 0.6411176031011134
+        },
+        {
+          "episode": 5,
+          "return": 37.31406522761259,
+          "val_signal": 0.5608674944144046
+        },
+        {
+          "episode": 6,
+          "return": 39.91987299388398,
+          "val_signal": 0.5392740980487846
+        },
+        {
+          "episode": 7,
+          "return": 39.4235219239434,
+          "val_signal": 0.6366706121471891
+        },
+        {
+          "episode": 8,
+          "return": 39.4235219239434,
+          "val_signal": 0.6366706121471891
+        },
+        {
+          "episode": 9,
+          "return": 39.423521923943404,
+          "val_signal": 0.6366706121471891
+        },
+        {
+          "episode": 10,
+          "return": 37.6396187544719,
+          "val_signal": 0.6366706121471891
+        },
+        {
+          "episode": 11,
+          "return": 39.64577410090961,
+          "val_signal": 0.6366706121471891
+        },
+        {
+          "episode": 12,
+          "return": 39.5346966977915,
+          "val_signal": 0.6366706121471891
+        },
+        {
+          "episode": 13,
+          "return": 37.75079352832,
+          "val_signal": 0.543721089002709
+        },
+        {
+          "episode": 14,
+          "return": 40.777193264468764,
+          "val_signal": 0.5608674944144046
+        },
+        {
+          "episode": 15,
+          "return": 34.990327149000585,
+          "val_signal": 0.5608674944144046
+        },
+        {
+          "episode": 16,
+          "return": 38.594880224805706,
+          "val_signal": 0.6308944763472453
+        },
+        {
+          "episode": 17,
+          "return": 36.526720315040414,
+          "val_signal": 0.6308944763472453
+        },
+        {
+          "episode": 18,
+          "return": 39.53469669779151,
+          "val_signal": 0.5608674944144046
+        },
+        {
+          "episode": 19,
+          "return": 41.28537124611252,
+          "val_signal": 0.6366706121471891
+        },
+        {
+          "episode": 20,
+          "return": 37.75069615759,
+          "val_signal": 0.6496888583923611
+        },
+        {
+          "episode": 21,
+          "return": 39.4235219239434,
+          "val_signal": 0.6366706121471891
+        },
+        {
+          "episode": 22,
+          "return": 39.53469669779151,
+          "val_signal": 0.6366706121471891
+        },
+        {
+          "episode": 23,
+          "return": 42.15066231138233,
+          "val_signal": 0.6411176031011134
+        },
+        {
+          "episode": 24,
+          "return": 37.75079352832,
+          "val_signal": 0.5608674944144046
+        },
+        {
+          "episode": 25,
+          "return": 41.54094941495923,
+          "val_signal": 0.6411176031011134
+        },
+        {
+          "episode": 26,
+          "return": 40.34853312917637,
+          "val_signal": 0.5392740980487846
+        },
+        {
+          "episode": 27,
+          "return": 39.53469669779151,
+          "val_signal": 0.6366706121471891
+        },
+        {
+          "episode": 28,
+          "return": 35.63336603730418,
+          "val_signal": 0.5608674944144046
+        },
+        {
+          "episode": 29,
+          "return": 41.85843477640351,
+          "val_signal": 0.6366706121471891
+        },
+        {
+          "episode": 30,
+          "return": 40.237358355328254,
+          "val_signal": 0.6366706121471891
+        },
+        {
+          "episode": 31,
+          "return": 41.652124188807335,
+          "val_signal": 0.6366706121471891
+        },
+        {
+          "episode": 32,
+          "return": 37.52844398062379,
+          "val_signal": 0.5608674944144046
+        },
+        {
+          "episode": 33,
+          "return": 38.99486178865101,
+          "val_signal": 0.6366706121471891
+        },
+        {
+          "episode": 34,
+          "return": 35.20470590201178,
+          "val_signal": 0.5608674944144046
+        },
+        {
+          "episode": 35,
+          "return": 37.099783845331395,
+          "val_signal": 0.5392740980487846
+        },
+        {
+          "episode": 36,
+          "return": 38.99486178865101,
+          "val_signal": 0.6366706121471891
+        },
+        {
+          "episode": 37,
+          "return": 37.6396187544719,
+          "val_signal": 0.6411176031011134
+        },
+        {
+          "episode": 38,
+          "return": 41.54094941495923,
+          "val_signal": 0.6366706121471891
+        },
+        {
+          "episode": 39,
+          "return": 39.7489780800727,
+          "val_signal": 0.5608674944144046
+        },
+        {
+          "episode": 40,
+          "return": 39.53469669779151,
+          "val_signal": 0.5608674944144046
+        },
+        {
+          "episode": 41,
+          "return": 37.2838442874052,
+          "val_signal": 0.6002267666453107
+        },
+        {
+          "episode": 42,
+          "return": 35.41101648960797,
+          "val_signal": 0.5608674944144046
+        },
+        {
+          "episode": 43,
+          "return": 39.2791185289448,
+          "val_signal": 0.6366706121471891
+        },
+        {
+          "episode": 44,
+          "return": 41.31859986726302,
+          "val_signal": 0.6366706121471891
+        },
+        {
+          "episode": 45,
+          "return": 39.27911852894481,
+          "val_signal": 0.5608674944144046
+        },
+        {
+          "episode": 46,
+          "return": 39.604574685074105,
+          "val_signal": 0.6308944763472453
+        },
+        {
+          "episode": 47,
+          "return": 41.75523079724042,
+          "val_signal": 0.6366706121471891
+        },
+        {
+          "episode": 48,
+          "return": 39.6045746850741,
+          "val_signal": 0.5608674944144046
+        },
+        {
+          "episode": 49,
+          "return": 39.8521820592358,
+          "val_signal": 0.6366706121471891
+        }
+      ]
+    }
+  ]
+}

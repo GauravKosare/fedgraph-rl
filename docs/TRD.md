@@ -80,6 +80,8 @@ Build the smallest honest testbed that can answer:
 | **F‑13** | Single‑seed experiment: train controller, evaluate policy (averaged over 7 sampled rollouts), compare to all baselines, write JSON + PNG. | `experiments/run_experiment.py`. |
 | **F‑14** | Multi‑seed sweep: run F‑13 over `n` seeds, report per‑policy mean ± std and paired per‑seed deltas, write JSON + PNG. | `experiments/sweep.py`. |
 | **F‑15** *(v0.2)* | Straggler model: heterogeneous client speeds; a selected client whose `epochs / speed` work time exceeds the per‑round deadline has its update dropped from FedAvg but still incurs compute cost. `stragglers=False` ⇒ v0.1 behaviour. | `FederatedEnv.__init__` / `.step`; `info["dropped"]`. |
+| **F‑16** *(v0.3)* | Payment‑flow data model: directed `victim → 1st‑hop mule → layering → cash‑out` graph; `n_highrisk_banks` receive most mule accounts; `legit_merchant_frac` decoys. Split is bank ownership (`partition_by_bank`). Nodes carry `amount_at_risk`. | `payment_data.py`; `test_payment_flow_money_metric`. |
+| **F‑17** *(v0.3)* | Money‑weighted evaluation: `money_recall` (£ at risk on caught mules ÷ total) at the threshold maximising catches with false‑positive‑rate ≤ `fp_budget`. RL reward = Δ(val money‑recall) × 100 when `reward_mode="money"`. | `metrics.money_weighted_scores`, `best_threshold_at_fp`; `FederatedServer.evaluate_money`; `FederatedEnv`. |
 
 ---
 
@@ -202,9 +204,11 @@ No external datasets. No PII. Data regenerated from seed on every run.
 
 | Version | Addition | Status | Result |
 |---|---|---|---|
-| 0.2 / 0.2.1 | Client stragglers + per‑round wall‑clock deadline; partial participation; REINFORCE stabilisation | **implemented** (`stragglers` etc. in `config.py`) | Instability fixed; RL +0.051 F1 vs random (3/5), +0.115 vs fixed cohort (5/5), but still ties a fraud‑rate heuristic. See README §4.2–4.3. |
-| 0.3 | Payment‑flow data model + money‑weighted metrics (see `TARGET_PROBLEM.md`) | planned | Reframe onto federated mule‑account detection |
-| 0.3 | Concept drift (client models decay if not retrained) | planned | Rewards *recency‑aware* scheduling |
+| 0.2 / 0.2.1 | Client stragglers + per‑round wall‑clock deadline; partial participation; REINFORCE stabilisation | **implemented** (`stragglers` etc.) | Instability fixed; RL +0.051 F1 vs random (3/5), +0.115 vs fixed cohort (5/5), still ties a fraud‑rate heuristic. README §4.2–4.3. |
+| 0.3 | Payment‑flow data model (`payment_data.py`) + money‑weighted metric (`money_weighted_scores`) + `reward_mode="money"` | **implemented** | Realistic benchmark; RL still ≈ random on money‑recall, both beat fixed‑cohort by ~0.07. README §4.4, DESIGN_LOG §17. |
+| 0.3.1 | Scarce‑coverage regime: stragglers on for the payment task / fewer rounds / per‑cycle screening‑latency budget | planned | The condition under which scheduling should finally matter |
+| 0.3.1 | Concept drift (client models decay if not retrained) | planned | Rewards *recency‑aware* scheduling |
+| — | GenAI investigation layer + MLOps + cloud (`AI_MLOPS_CLOUD.md`) | planned | Turns the repo into an AI · MLOps · Cloud project |
 | 0.3 | Richer state: per‑client gradient norm, embedding drift, update disagreement | More signal for the policy |
 | 0.3 | GraphSAGE sampling layer (mini‑batch, scale past dense adjacency) | Larger graphs |
 | 0.4 | Secure‑aggregation / DP‑SGD cost model | Realistic privacy–utility trade‑off in the reward |

@@ -4,12 +4,19 @@ from dataclasses import dataclass, field, asdict
 @dataclass
 class Config:
     # graph / data
+    data_model: str = "rings"          # "rings" (v0.1/v0.2) | "payment_flow" (v0.3)
     num_accounts: int = 1200
     num_features: int = 16
     fraud_ring_count: int = 12
     num_clients: int = 8
     dirichlet_alpha: float = 0.10       # lower => more non-IID
     seed: int = 7
+
+    # v0.3 payment-flow model (used when data_model == "payment_flow")
+    n_banks: int = 6                   # one federated client per bank
+    n_scam_episodes: int = 55
+    reward_mode: str = "f1"            # "f1" | "money" (Δ money-recall at fp_budget)
+    fp_budget: float = 0.05            # tolerated false-positive rate (frozen legit accounts)
 
     # model
     hidden: int = 32

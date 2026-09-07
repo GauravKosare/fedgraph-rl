@@ -66,8 +66,40 @@ def test_straggler_drop():
     assert info["dropped"] >= 1
 
 
+def test_payment_flow_money_metric():
+    from fedgraphrl.payment_data import make_payment_graph, partition_by_bank
+    from fedgraphrl.environment import FederatedEnv
+    from fedgraphrl.metrics import money_weighted_scores
+
+    data, episodes = make_payment_graph(n_accounts=400, n_banks=4,
+                                        n_scam_episodes=15, seed=3)
+    assert data.amount_at_risk is not None and data.bank_of is not None
+    assert data.labels.sum() > 0 and len(episodes) == 15
+    shards = partition_by_bank(data)
+    assert len(shards) == 4 and sum(len(s) for s in shards) == data.num_nodes
+    # victim and first hop should usually be at different banks
+    diff = [data.bank_of[e.victim] != data.bank_of[e.first_hop] for e in episodes]
+    assert sum(diff) >= 0.7 * len(episodes)
+
+    # money metric: perfect ranking -> money_recall 1.0 at any FP budget
+    perfect = data.labels.astype(float)
+    m = money_weighted_scores(data.labels, perfect, data.amount_at_risk, fp_budget=0.02)
+    assert m["money_recall"] > 0.99 and m["fp_rate"] <= 0.02 + 1e-9
+
+    cfg = {"hidden": 16, "dropout": 0.5, "n_classes": 2, "in_dim": data.num_features}
+    env = FederatedEnv(data, shards, cfg, max_rounds=3, clients_per_round=2,
+                       epoch_budget=6, reward_mode="money", fp_budget=0.05, seed=3)
+    s = env.reset()
+    _, r, done, info = env.step(np.array([0, 1]), np.array([3, 3]))
+    assert np.isfinite(r)
+    _, _, done, info = env.step(np.array([2, 3]), np.array([3, 3]))
+    _, _, done, info = env.step(np.array([0, 2]), np.array([3, 3]))
+    assert done and "money_recall" in info["test"]
+
+
 if __name__ == "__main__":
     test_matmul_relu_gradcheck()
     test_federated_round_smoke()
     test_straggler_drop()
+    test_payment_flow_money_metric()
     print("ok")
