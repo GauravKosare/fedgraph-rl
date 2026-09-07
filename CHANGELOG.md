@@ -3,6 +3,26 @@
 All notable changes to this project are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.3.1] — unreleased
+
+### Added
+- **`--scarce` regime** for `run_payment_experiment.py` (v0.3.1): 8 federated
+  rounds instead of 25 (~2.7 visits/bank) + stragglers on. Coverage is genuinely
+  scarce, so *which* banks are scheduled matters. Writes `*_scarce` artifacts.
+
+### Results (5 seeds, `run_payment_experiment.py 5 --scarce`)
+- **Hypothesis failed.** Even with an 8-round budget + stragglers + non-IID by
+  bank, RL does **not** beat uniform-random: RL 0.552 ± 0.101 vs random
+  0.573 ± 0.101 (Δ −0.020, RL wins 3/5). Scarcity mostly added variance.
+- `fraud_greedy` / `all` collapse to 0.271 (+0.282 for RL) — 8 rounds on 2 banks
+  trains almost nothing.
+- **Strongest form of the project's null result:** the regime was built to be the
+  one where scheduling matters most, and REINFORCE client selection still ties
+  random. Beating it needs a different method (coverage-aware policy / heuristic),
+  not another environment knob — the v0.4 direction.
+
+---
+
 ## [0.3.0] — unreleased
 
 The problem reframing (see `docs/DESIGN_LOG.md` §17). The RL algorithm is

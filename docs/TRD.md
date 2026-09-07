@@ -206,7 +206,8 @@ No external datasets. No PII. Data regenerated from seed on every run.
 |---|---|---|---|
 | 0.2 / 0.2.1 | Client stragglers + per‑round wall‑clock deadline; partial participation; REINFORCE stabilisation | **implemented** (`stragglers` etc.) | Instability fixed; RL +0.051 F1 vs random (3/5), +0.115 vs fixed cohort (5/5), still ties a fraud‑rate heuristic. README §4.2–4.3. |
 | 0.3 | Payment‑flow data model (`payment_data.py`) + money‑weighted metric (`money_weighted_scores`) + `reward_mode="money"` | **implemented** | Realistic benchmark; RL still ≈ random on money‑recall, both beat fixed‑cohort by ~0.07. README §4.4, DESIGN_LOG §17. |
-| 0.3.1 | Scarce‑coverage regime: stragglers on for the payment task / fewer rounds / per‑cycle screening‑latency budget | planned | The condition under which scheduling should finally matter |
+| 0.3.1 | Scarce‑coverage regime (`--scarce`): 8 rounds + stragglers on for the payment task | **implemented** | RL still ties random (−0.020, ±0.10); fixed‑cohort collapses (+0.28). Strongest form of the null result. README §4.5, DESIGN_LOG §18. |
+| 0.4 | Coverage‑aware method: policy with per‑bank visit memory, or a non‑learned "visit‑all‑then‑greedy" heuristic | planned | The actual lever — a scheduler that provably covers every bank should beat random in the scarce regime |
 | 0.3.1 | Concept drift (client models decay if not retrained) | planned | Rewards *recency‑aware* scheduling |
 | — | GenAI investigation layer + MLOps + cloud (`AI_MLOPS_CLOUD.md`) | planned | Turns the repo into an AI · MLOps · Cloud project |
 | 0.3 | Richer state: per‑client gradient norm, embedding drift, update disagreement | More signal for the policy |

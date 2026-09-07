@@ -7,7 +7,12 @@ Same RL controller and baselines as `run_experiment.py`, but:
   * reward / metric = **money-recall at a false-positive budget** (Δ money at
             risk on caught mules), not F1
 
-Run:  python experiments/run_payment_experiment.py [n_seeds]
+Run:  python experiments/run_payment_experiment.py [n_seeds] [--scarce]
+
+  --scarce   v0.3.1 scarce-coverage regime: only 8 federated rounds (2 of 6 banks
+             each -> ~2.7 visits/bank, so random selection leaves some banks
+             barely trained) and stragglers on (banks with old infra contribute
+             partial updates). Writes results_payment_scarce*.{json,png}.
 """
 from __future__ import annotations
 
@@ -129,13 +134,19 @@ def _fmt(name, m):
 
 
 def main():
-    n_seeds = int(sys.argv[1]) if len(sys.argv) > 1 else 1
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    scarce = "--scarce" in sys.argv
+    n_seeds = int(args[0]) if args else 1
     cfg = Config()
     cfg.data_model = "payment_flow"
     cfg.reward_mode = "money"
     cfg.clients_per_round = 2          # 2 of 6 banks -> which 2 genuinely matters
+    if scarce:                        # v0.3.1: make coverage genuinely scarce
+        cfg.max_rounds = 8
+        cfg.stragglers = True
     if n_seeds > 1:
         cfg.episodes = 100
+    scarce_tag = "_scarce" if scarce else ""
     t0 = time.time()
 
     per_seed = []
@@ -148,7 +159,7 @@ def main():
         for name, m in res.items():
             print(_fmt(name, m))
 
-    tag = "" if n_seeds == 1 else "_sweep"
+    tag = ("" if n_seeds == 1 else "_sweep") + scarce_tag
     out = Path(__file__).resolve().parents[1] / "experiments" / f"results_payment{tag}.json"
     payload = {"config": cfg.to_dict(), "per_seed": per_seed}
     if n_seeds > 1:

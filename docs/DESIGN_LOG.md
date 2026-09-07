@@ -387,6 +387,46 @@ noisy graph. Renamed `centralised_pooled`.
 **What v0.3 actually delivers:** a benchmark that is defensible as a model of the
 real problem (`TARGET_PROBLEM.md`), with money‑weighted evaluation. The RL result
 is the same honest tie — which is itself the finding: **a learned scheduler is
-not the lever; the environment has to make timing/coverage genuinely scarce**
-(v0.3.1 candidates: stragglers on for the payment task, or 8 rounds instead of
-25, or a per‑cycle screening‑latency budget).
+not the lever; the environment has to make timing/coverage genuinely scarce**.
+
+---
+
+## 18. v0.3.1 — the scarce‑coverage regime (`--scarce`)
+
+**Decision.** Test the §17 hypothesis directly. Same payment‑flow task and
+money‑weighted reward, but coverage is now genuinely scarce:
+
+- **8 federated rounds** instead of 25. With 2‑of‑6 banks per round that is ~2.7
+  visits per bank — random selection *will*, by chance, leave one or two banks
+  barely trained, and the layering mules those banks hold go undetected.
+- **Stragglers on** — some banks run on slower infrastructure and contribute only
+  partial updates, so *which* banks you schedule, and *when*, matters more.
+
+`python experiments/run_payment_experiment.py 5 --scarce` → `*_scarce` artifacts.
+
+**Result (5 seeds).** The hypothesis **failed**. Even here — a hard 8‑round
+budget, stragglers on, non‑IID by bank — REINFORCE client selection does **not**
+beat uniform‑random:
+
+| | money‑recall | vs random |
+|---|---|---|
+| RL controller | 0.552 ± 0.101 | −0.020, RL wins 3/5 |
+| Uniform‑random | 0.573 ± 0.101 | — |
+| `fraud_greedy` / `all` | 0.271 ± 0.134 | +0.282, RL wins 5/5 |
+
+Scarcity mostly just **added variance** (both policies ±0.10, up from ±0.05–0.07):
+RL crushes random on seed 207 (+0.18) and loses badly on seeds 307/407 (−0.12,
+−0.19). The mean is a tie, slightly the wrong way. `fraud_greedy` / `all` collapse
+as expected — 8 rounds on 2 banks trains almost nothing.
+
+Why random holds: money‑recall is dominated by catching the high‑value first‑hop
+mules, which live at banks 0–1; random hits those two banks ~2.7 times each in 8
+rounds, which is enough. Leaving an *ordinary* bank untrained costs only the
+lower‑value layering mules. RL never finds a schedule that reliably beats "hit
+the big banks often, which random already does."
+
+**This is the strongest form of the project's null result:** the regime was
+hand‑built to be the one where scheduling matters most, and REINFORCE client
+selection *still* ties random. The lever is not a cleverer environment knob —
+it is a different method (a policy with memory of per‑bank coverage; or a
+non‑learned coverage‑guaranteeing heuristic, which would likely beat both).

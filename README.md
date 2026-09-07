@@ -1,7 +1,8 @@
 # FedGraph‑RL
 
 **Can a reinforcement‑learned scheduler beat random client selection in
-federated graph‑neural‑network fraud detection?**
+federated graph‑neural‑network fraud detection?** *(Across every variant tried:
+no — see the headline result below. It's a negative‑result study.)*
 
 A self‑contained research sandbox that fuses three machine‑learning paradigms into
 one system — a **Graph Neural Network** fraud detector, trained by **Federated
@@ -15,11 +16,20 @@ compute.
 >   uniform‑random client selection** (−0.017 F1) and a fraud‑rate heuristic.
 >   Random client sampling is a genuinely strong baseline — consistent with the
 >   federated‑learning literature.
-> - **v0.2.1 (stragglers + wall‑clock deadline, stabilised):** adding timing
->   pressure moves the result in RL's favour — **+0.051 F1 vs random, winning 3/5
->   seeds** (and +0.115, 5/5, vs a fixed cohort). The v0.2 training‑collapse
->   failure mode is fixed. But it is still within cross‑seed noise and still does
->   not beat a fraud‑rate heuristic — a lean, not a clean win. See §4.2.
+> - **v0.2.1 (stragglers + wall‑clock deadline, stabilised):** timing pressure
+>   nudges RL ahead of random — +0.051 F1, 3/5 seeds — but still within noise and
+>   still behind a fraud‑rate heuristic. See §4.2.
+> - **v0.3 (realistic payment‑flow problem, money‑weighted reward):** RL is an
+>   **exact tie with uniform‑random** on money‑recall (0.639 vs 0.639); beats
+>   fixed‑cohort strategies by +0.13. See §4.4.
+> - **v0.3.1 (scarce‑coverage regime — 8 rounds, hand‑built to force an RL win):**
+>   RL **still does not beat random** (−0.020, ±0.10). This is the strongest form
+>   of the null result. See §4.5.
+>
+> **Bottom line:** across every variant, REINFORCE client selection reliably beats
+> *bad* fixed strategies but never beats uniform‑random by more than noise.
+> Beating random needs a different *method* (coverage‑aware policy or heuristic),
+> not a different environment.
 
 Everything runs on **NumPy only** (no PyTorch/TensorFlow), CPU, in minutes.
 
@@ -294,16 +304,57 @@ scarce enough for scheduling to matter.
 a cost that is money not F1‑points, decoys that create real false‑positive
 pressure, and evaluation in the units a bank actually reports. The RL tie is
 itself the finding — **the environment has to make coverage genuinely scarce**
-before a learned scheduler earns its complexity (v0.3.1: stragglers on for the
-payment task, fewer rounds, or a per‑cycle screening‑latency budget).
+before a learned scheduler earns its complexity — which is exactly what §4.5 tests.
 
-### When would RL be expected to win cleanly?
+### 4.5 v0.3.1 — the scarce‑coverage regime (`--scarce`)
 
-Fix the training instability (done, §4.3), then add pressures that make *timing*
-carry reward — client dropouts, concept drift, a communication budget tight
-enough that "train everyone eventually" is infeasible, or the scarce‑coverage
-regime above. Those are the conditions under which FL client selection is a
-genuinely open research problem.
+Same payment‑flow task and money‑weighted reward, but coverage is now genuinely
+scarce: **8 federated rounds instead of 25** (2‑of‑6 banks per round ≈ 2.7 visits
+each) and **stragglers on**. This regime was hand‑built to be the one where
+scheduling should matter most. Reproduce:
+`python experiments/run_payment_experiment.py 5 --scarce`.
+
+| Policy | money‑recall @ 5% FP (5 seeds) | vs RL, paired |
+|---|---|---|
+| **RL controller** | 0.552 ± 0.101 | — |
+| Uniform‑random | **0.573 ± 0.101** | −0.020, RL wins 3/5 |
+| Fraud‑rate greedy | 0.271 ± 0.134 | +0.282, RL wins 5/5 |
+| Fixed cohort | 0.271 ± 0.134 | +0.282, RL wins 5/5 |
+| Centralised (pooled) reference | 0.262 ± 0.144 | +0.291, RL wins 5/5 |
+
+**The hypothesis failed — and this is the strongest form of the null result.**
+Even with a hard 8‑round budget, stragglers, and non‑IID by bank, REINFORCE
+client selection does **not** beat uniform‑random (−0.020, within the ±0.10 noise;
+RL wins seed 207 by +0.18, loses seeds 307/407 by −0.12/−0.19). Scarcity mostly
+just *added variance*. `fraud_greedy` / `all` collapse (+0.28) — 8 rounds on 2
+banks trains almost nothing.
+
+Why random holds: money‑recall is dominated by catching the high‑value first‑hop
+mules at banks 0–1, and random hits those two banks ~2.7× each in 8 rounds —
+enough. Leaving an *ordinary* bank untrained costs only the lower‑value layering
+mules. The policy never finds a schedule that reliably beats "hit the big banks
+often," which random already does.
+
+**Conclusion for the project:** the lever was never a cleverer environment knob.
+Beating random here needs a different *method* — a policy with explicit memory of
+per‑bank coverage, or simply a non‑learned coverage‑guaranteeing heuristic (visit
+every bank once, then greedily by value), which would likely beat both RL and
+random. That is the honest v0.4 direction.
+
+### Where the project landed
+
+Across v0.1 → v0.3.1 — generic graph then realistic payment‑flow, F1 reward then
+money‑weighted, 25 rounds then a hard 8‑round budget, stragglers, non‑IID by
+ownership — **REINFORCE client selection never beat uniform‑random by more than
+noise.** It reliably beats *bad* fixed strategies (fixed cohort, fraud‑greedy),
+and it stays close to random with slightly lower variance, but the decisive win
+never materialised, including in the regime (§4.5) hand‑built to force it.
+
+The honest read: uniform‑random client sampling is a genuinely strong baseline
+(a well‑documented result in the FL literature), and beating it needs a
+**different method**, not a different environment — a policy with explicit
+per‑client coverage memory, or a non‑learned "cover everyone once, then greedy by
+value" heuristic. That is the v0.4 direction.
 
 ### AI · MLOps · Cloud
 
@@ -330,10 +381,11 @@ fedgraph-rl/
 ├── experiments/
 │   ├── run_experiment.py         v0.1/v0.2 single-seed: train controller, compare to baselines, plot
 │   ├── sweep.py                  v0.1/v0.2 multi-seed: mean ± std + paired comparison ( --stragglers for v0.2 )
-│   ├── run_payment_experiment.py v0.3: payment-flow data + money-weighted metric ( arg = n_seeds )
+│   ├── run_payment_experiment.py v0.3: payment-flow + money metric ( n_seeds arg; --scarce for v0.3.1 )
 │   ├── results*.json/.png              v0.1 artifacts (committed)
 │   ├── sweep_results*.json/.png        v0.1 / v0.2 5-seed artifacts (committed)
-│   └── results_payment*.json/.png      v0.3 artifacts (committed)
+│   ├── results_payment*.json/.png      v0.3 artifacts (committed)
+│   └── results_payment*_scarce.json/.png  v0.3.1 scarce-coverage artifacts (committed)
 ├── tests/test_autograd.py     gradient check + federated-round + payment-flow smoke tests
 ├── docs/
 │   ├── TRD.md                 Technical Requirements Document
