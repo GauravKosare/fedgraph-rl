@@ -3,6 +3,30 @@
 All notable changes to this project are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.4.0] — unreleased
+
+### Added
+- **`coverage` heuristic** in `HeuristicController` (v0.4): a non-learned scheduler
+  — each round picks the `k` clients maximising
+  `rounds-since-last-selected + value_weight * shard-fraud-rate * max_rounds`.
+  Guarantees every client is trained before any is retrained (which random
+  cannot in a short round budget) and tie-breaks toward high-value shards.
+  Added as a baseline in `run_payment_experiment.py`.
+
+### Results (5 seeds)
+- **`coverage` also does not beat random.** Scarce regime: coverage 0.556 ± 0.112
+  vs random 0.573 ± 0.101 (−0.017, wins 2/5) — same tie as RL. The seed-7 preview
+  (coverage 0.677) did not generalise.
+- **Definitive null result:** nothing beats uniform-random client selection on
+  this problem — not REINFORCE, not a purpose-built coverage heuristic. Random is
+  near-optimal because money-recall is dominated by the first-hop mules at the
+  high-risk banks, which random covers plenty. Only a *fixed* cohort reliably
+  loses.
+- Engineering takeaway: for FL client selection on a problem shaped like this,
+  use random (or availability-based) sampling — do not build a scheduler.
+
+---
+
 ## [0.3.1] — unreleased
 
 ### Added

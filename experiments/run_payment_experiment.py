@@ -120,7 +120,7 @@ def run_once(cfg: Config, seed: int, verbose=True):
         return {k: float(np.mean([r[k] for r in runs])) for k in METRIC_KEYS}
 
     results = {"rl_reinforce": eval_policy()}
-    for kind in ("random", "fraud_greedy", "all"):
+    for kind in ("random", "coverage", "fraud_greedy", "all"):
         env_b = make_env(cfg, data, shards, model_cfg, seed=seed + 1)
         _, info = HeuristicController(env_b, kind=kind, seed=seed).run_episode()
         results[kind] = info["test"]

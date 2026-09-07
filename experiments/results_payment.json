@@ -57,6 +57,18 @@
           "threshold": 0.5774656256116095,
           "fp_budget": 0.05
         },
+        "coverage": {
+          "money_recall": 0.6426995179150303,
+          "money_at_risk_total": 193556.60711675306,
+          "money_at_risk_caught": 124398.73808320612,
+          "fp_rate": 0.049723756906077346,
+          "recall": 0.423728813559322,
+          "precision": 0.7352941176470589,
+          "f1": 0.5376344086021505,
+          "auc": 0.873770952336361,
+          "threshold": 0.5915903307579362,
+          "fp_budget": 0.05
+        },
         "fraud_greedy": {
           "money_recall": 0.5682283822391998,
           "money_at_risk_total": 193556.60711675306,

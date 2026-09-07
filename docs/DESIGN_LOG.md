@@ -425,8 +425,51 @@ rounds, which is enough. Leaving an *ordinary* bank untrained costs only the
 lower‑value layering mules. RL never finds a schedule that reliably beats "hit
 the big banks often, which random already does."
 
-**This is the strongest form of the project's null result:** the regime was
+**This is a very strong form of the project's null result:** the regime was
 hand‑built to be the one where scheduling matters most, and REINFORCE client
-selection *still* ties random. The lever is not a cleverer environment knob —
-it is a different method (a policy with memory of per‑bank coverage; or a
-non‑learned coverage‑guaranteeing heuristic, which would likely beat both).
+selection *still* ties random. The obvious next hypothesis — that a non‑learned
+coverage‑guaranteeing heuristic would beat both — is tested in §19 (it doesn't).
+
+---
+
+## 19. v0.4 — the coverage‑aware heuristic (`coverage` baseline)
+
+**Decision.** Act on §18's conclusion. Add a **non‑learned** scheduler to
+`HeuristicController` — no RL, ~5 lines. Each round it picks the `k` clients
+maximising
+
+    rounds‑since‑last‑selected  +  value_weight · shard‑fraud‑rate · max_rounds
+
+So it never revisits a client while another is staler (guaranteed full coverage
+before any retrain — the thing random *cannot* promise in 8 rounds), and among
+equally‑stale clients it prefers the higher‑value shards.
+
+**Why this and not more RL.** The whole project shows REINFORCE ties random. The
+hypothesis from §18 is that the missing ingredient is *explicit coverage
+accounting*, which a 5‑line rule expresses directly and a policy‑gradient method
+apparently never learns from reward alone.
+
+**Result (5 seeds, scarce regime).** The hypothesis **also failed**. The single
+seed that motivated it (seed 7: `coverage` 0.677) did not generalise:
+
+| | money‑recall (scarce) | vs random |
+|---|---|---|
+| `coverage` heuristic | 0.556 ± 0.112 | −0.017, wins 2/5 |
+| RL controller | 0.552 ± 0.101 | −0.020, wins 3/5 |
+| Uniform‑random | 0.573 ± 0.101 | — |
+
+Guaranteeing full bank coverage buys **almost nothing**, because on this task
+money‑recall is dominated by the high‑value first‑hop mules at the two high‑risk
+banks — and random hits those two banks plenty in 8 rounds. The extra coverage
+`coverage` provides is coverage of the *ordinary* banks, which hold only the
+low‑value layering mules; at a tight FP budget that doesn't move the number.
+
+**This is the definitive form of the null result.** Nothing beats uniform‑random
+client selection on this problem — not REINFORCE, not a purpose‑built coverage
+heuristic. Random is genuinely near‑optimal here. The only thing that reliably
+loses is a *fixed* cohort. The honest engineering takeaway for FL client
+selection on a problem shaped like this: **use random (or availability‑based)
+sampling; do not build a scheduler.** A learned or hand‑coded scheduler is worth
+it only when the value is spread evenly across clients *and* the round budget is
+tight enough that random genuinely under‑covers the valuable ones — neither holds
+here.

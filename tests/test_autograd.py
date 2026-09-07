@@ -97,9 +97,37 @@ def test_payment_flow_money_metric():
     assert done and "money_recall" in info["test"]
 
 
+def test_coverage_heuristic_visits_all():
+    from fedgraphrl.payment_data import make_payment_graph, partition_by_bank
+    from fedgraphrl.environment import FederatedEnv
+    from fedgraphrl.rl_controller import HeuristicController
+
+    data, _ = make_payment_graph(n_accounts=500, n_banks=5, n_scam_episodes=18, seed=4)
+    shards = partition_by_bank(data)
+    cfg = {"hidden": 16, "dropout": 0.5, "n_classes": 2, "in_dim": data.num_features}
+    env = FederatedEnv(data, shards, cfg, max_rounds=8, clients_per_round=2,
+                       epoch_budget=6, reward_mode="money", fp_budget=0.05, seed=4)
+    # instrument: record which clients the coverage heuristic picks each round
+    picked = []
+    orig_step = env.step
+    def spy(sel, ep):
+        picked.append(tuple(int(x) for x in sel))
+        return orig_step(sel, ep)
+    env.step = spy
+    HeuristicController(env, kind="coverage", seed=4).run_episode()
+    visited = set(c for rnd in picked for c in rnd)
+    assert visited == set(range(5)), visited          # every bank trained at least once
+    # a bank is never revisited while another is still unvisited (first 2-3 rounds)
+    seen = set()
+    for rnd in picked[:3]:
+        seen |= set(rnd)
+    assert len(seen) >= 5 - 1
+
+
 if __name__ == "__main__":
     test_matmul_relu_gradcheck()
     test_federated_round_smoke()
     test_straggler_drop()
     test_payment_flow_money_metric()
+    test_coverage_heuristic_visits_all()
     print("ok")

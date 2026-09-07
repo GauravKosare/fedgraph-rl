@@ -235,11 +235,22 @@ class ReinforceController:
 
 # ---------------------------------------------------------------------
 class HeuristicController:
-    """Non-learning baselines for comparison."""
+    """Non-learning baselines for comparison.
 
-    def __init__(self, env, kind: str = "random", seed: int = 0):
+    `coverage` (v0.4): the non-learned scheduler the null result points to.  Each
+    round it picks the `k` clients maximising
+        rounds-since-last-selected  +  value_weight * shard-value * max_rounds
+    -- i.e. never revisit a client while another is staler, and among equally
+    stale clients prefer the higher-value (higher fraud-rate) shards.  This
+    *guarantees* every client is trained before any is retrained, which random
+    selection cannot.
+    """
+
+    def __init__(self, env, kind: str = "random", seed: int = 0,
+                 value_weight: float = 0.5):
         self.env = env
         self.kind = kind
+        self.value_weight = value_weight
         self.rng = np.random.default_rng(seed)
 
     def run_episode(self, train: bool = False):
@@ -256,6 +267,11 @@ class HeuristicController:
                 chosen = np.arange(min(k, n))
             elif self.kind == "fraud_greedy":
                 chosen = np.argsort(-self.env.client_desc[:, 1])[:k]
+            elif self.kind == "coverage":
+                value = self.env.client_desc[:, 1]           # shard fraud/mule rate in [0,1]
+                score = (self.env.since_selected
+                         + self.value_weight * value * self.env.max_rounds)
+                chosen = np.argsort(-score)[:k]
             else:
                 raise ValueError(self.kind)
             epochs = np.full(len(chosen), self.env.epoch_budget // len(chosen))

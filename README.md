@@ -22,14 +22,15 @@ compute.
 > - **v0.3 (realistic payment‑flow problem, money‑weighted reward):** RL is an
 >   **exact tie with uniform‑random** on money‑recall (0.639 vs 0.639); beats
 >   fixed‑cohort strategies by +0.13. See §4.4.
-> - **v0.3.1 (scarce‑coverage regime — 8 rounds, hand‑built to force an RL win):**
->   RL **still does not beat random** (−0.020, ±0.10). This is the strongest form
->   of the null result. See §4.5.
+> - **v0.3.1 (scarce regime — 8 rounds, hand‑built to force a win):** RL still
+>   does not beat random (−0.020). See §4.5.
+> - **v0.4 (non‑learned coverage heuristic):** a purpose‑built staleness+value
+>   scheduler **also** does not beat random (−0.017). See §4.6.
 >
-> **Bottom line:** across every variant, REINFORCE client selection reliably beats
-> *bad* fixed strategies but never beats uniform‑random by more than noise.
-> Beating random needs a different *method* (coverage‑aware policy or heuristic),
-> not a different environment.
+> **Bottom line:** across every variant — generic then realistic problem, F1 then
+> money reward, 25 then 8 rounds, stragglers, RL *and* a hand‑coded coverage rule
+> — **nothing beats uniform‑random client selection.** Only a fixed cohort
+> reliably loses. On a problem shaped like this, don't build a scheduler.
 
 Everything runs on **NumPy only** (no PyTorch/TensorFlow), CPU, in minutes.
 
@@ -282,6 +283,7 @@ Reproduce: `python experiments/run_payment_experiment.py 5`.
 |---|---|---|
 | **RL controller** | **0.639 ± 0.052** | — |
 | Uniform‑random | 0.639 ± 0.071 | −0.000, RL wins 3/5 |
+| `coverage` heuristic (v0.4) | 0.628 ± 0.056 | +0.011, RL wins 3/5 |
 | Fraud‑rate greedy (only high‑risk banks) | 0.508 ± 0.086 | **+0.131, RL wins 5/5** |
 | Fixed cohort | 0.508 ± 0.086 | **+0.131, RL wins 5/5** |
 | Centralised (pooled) reference † | 0.262 ± 0.144 | +0.377, RL wins 5/5 |
@@ -336,25 +338,62 @@ mules. The policy never finds a schedule that reliably beats "hit the big banks
 often," which random already does.
 
 **Conclusion for the project:** the lever was never a cleverer environment knob.
-Beating random here needs a different *method* — a policy with explicit memory of
-per‑bank coverage, or simply a non‑learned coverage‑guaranteeing heuristic (visit
-every bank once, then greedily by value), which would likely beat both RL and
-random. That is the honest v0.4 direction.
+Beating random here needs a different *method* — see §4.6.
+
+### 4.6 v0.4 — the coverage‑aware heuristic
+
+Acting on §4.5: add a **non‑learned** scheduler (`coverage` baseline, ~5 lines in
+`HeuristicController`). Each round it picks the `k` clients maximising
+
+```
+rounds‑since‑last‑selected  +  value_weight · shard‑fraud‑rate · max_rounds
+```
+
+— never revisit a client while another is staler (so every client is trained
+before any is retrained — the guarantee random can't give in 8 rounds), and among
+equally‑stale clients prefer the higher‑value shards.
+
+| Policy | money‑recall @ 5% FP — scarce (5 seeds) | non‑scarce (5 seeds) |
+|---|---|---|
+| `coverage` heuristic | 0.556 ± 0.112 | 0.628 ± 0.056 |
+| RL controller | 0.552 ± 0.101 | 0.639 ± 0.052 |
+| **Uniform‑random** | **0.573 ± 0.101** | **0.639 ± 0.071** |
+| Fraud‑rate greedy | 0.271 ± 0.134 | 0.508 ± 0.086 |
+
+**The coverage heuristic also does not beat random** — scarce −0.017 (wins 2/5),
+non‑scarce −0.011. The same tie as RL, in both regimes. The one seed that
+motivated it (seed 7 scarce: coverage 0.677) did not generalise. Guaranteeing
+full bank coverage buys almost nothing: money‑recall is dominated by the
+high‑value first‑hop mules at the two high‑risk banks, which random already
+covers plenty; the extra coverage is of *ordinary* banks holding only low‑value
+layering mules.
+
+**This is the definitive form of the null result.** Nothing beats uniform‑random
+client selection on this problem — not REINFORCE, not a purpose‑built coverage
+rule. Only a *fixed* cohort reliably loses. **Engineering takeaway:** for FL
+client selection on a problem shaped like this, use random (or availability‑based)
+sampling; don't build a scheduler at all.
 
 ### Where the project landed
 
-Across v0.1 → v0.3.1 — generic graph then realistic payment‑flow, F1 reward then
+Across **v0.1 → v0.4** — generic graph then realistic payment‑flow, F1 reward then
 money‑weighted, 25 rounds then a hard 8‑round budget, stragglers, non‑IID by
-ownership — **REINFORCE client selection never beat uniform‑random by more than
-noise.** It reliably beats *bad* fixed strategies (fixed cohort, fraud‑greedy),
-and it stays close to random with slightly lower variance, but the decisive win
-never materialised, including in the regime (§4.5) hand‑built to force it.
+ownership, REINFORCE *and* a purpose‑built non‑learned coverage heuristic —
+**nothing beat uniform‑random client selection by more than noise.** The only
+strategy that reliably loses is a *fixed* cohort.
 
-The honest read: uniform‑random client sampling is a genuinely strong baseline
-(a well‑documented result in the FL literature), and beating it needs a
-**different method**, not a different environment — a policy with explicit
-per‑client coverage memory, or a non‑learned "cover everyone once, then greedy by
-value" heuristic. That is the v0.4 direction.
+This is a clean negative result, and a useful one. Uniform‑random client sampling
+is a genuinely strong baseline (well‑documented in the FL literature), and on a
+problem where the value is concentrated on a few clients that random already
+covers, no amount of scheduling cleverness — learned or hand‑coded — recovers a
+meaningful edge. **The engineering advice that falls out: for FL client selection
+on a problem shaped like this, use random or availability‑based sampling and
+spend the effort elsewhere** (better features, secure aggregation, the GenAI
+triage layer in [`docs/AI_MLOPS_CLOUD.md`](docs/AI_MLOPS_CLOUD.md)).
+
+A learned scheduler would only be expected to pay off if the value were spread
+*evenly* across clients **and** the round budget were tight enough that random
+genuinely under‑covers the valuable ones — a regime this problem doesn't have.
 
 ### AI · MLOps · Cloud
 
